@@ -1,6 +1,7 @@
 # Created by Marc Winstel on July 14, 2025
 import numpy as np
-
+from math import floor
+from transaction import initializeRandomNumGenerator, generateUniformFloats, generateGaussianFloats
 
 
 
@@ -24,14 +25,20 @@ class CoinSelectionDistribution:
         self.expn = []
         self.mode = "grandcanonical"
         
+        self.rng = initializeRandomNumGenerator()
+        
+        if beta == 0.0:
+            print("Warning: beta is zero, currently not possible (should become a uniform distribution in general). Set to 1.0")
+            self.beta = 1.0
+        
         
         
         self.fixTokenNoGlobally(10.0)  # Example value, can be adjusted        
             
     
-    def compDenominatorDistribution(self, tokenSet):
+    def compDenominatorDiscDistribution(self, tokenSet):
         """
-        Computes  \sum_t exp(-beta * t.value) for the distribution of a set of tokens
+        Compute the denominator for the coin selection distribution.
         """
         sum = 0.0
         
@@ -40,24 +47,82 @@ class CoinSelectionDistribution:
             sum += self.compProbability(val)
         return sum 
     
-    def compDistribution(self, tokenSetInWallet, transactionValue):
+    def removeTokensHigherThanTransactionValue(self, tokenSetInWallet, transactionValue):
+        """
+        Remove tokens from the wallet that have a value greater than the transaction value.
+        """
+        return [token for token in tokenSetInWallet if token.value <= transactionValue]
+    
+    def compDistributionDiscrSet(self, tokenSetInWallet, transactionValue):
         """
         Compute the coin selection distribution for a set of tokens, given a fixed transaction value.
+        First, all tokens with value > 0.0 and <= transactionValue are selected.
+        Then, the probabilities are computed as p(t.value) = exp(-beta * t.value)
+        Denominator  contains \sum_t exp(-beta * t.value) for the distribution of a set of tokens (does not use the function removeTokensHigherThanTransactionValue to optimize computation time).
+        intBoundsForUniformDrawing builds intervals such that a uniform random number can be drawn from [0, denominator] and the corresponding token can be selected.
         """
-        tokenSet = [token for token in tokenSetInWallet if (token.value > 0.0 and token.value <= transactionValue)]
-        denominator = self.compDenominatorDistribution(tokenSet, transactionValue)
-        probabilities = [] # list of all p(t.value) = exp(-beta *t.value) / denominator, for all token in tokenSet (i.e., only those with value > 0.0 and <= transactionValue)
- 
+        tokenSet = self.removeTokensHigherThanTransactionValue(tokenSetInWallet, transactionValue)
+        denominator = 0.0
+        probabilities = [] # list of all p(t.value) = exp(-beta *t.value) for all token in tokenSet (i.e., only those with value > 0.0 and <= transactionValue)
+        intBoundsForUniformDrawing = []
         
         for i, token in enumerate(tokenSet):
             val = token.value()
-            prob = self.compProbability(val) / denominator
+            prob = self.compProbability(val) 
             probabilities.append(prob)
+            denominator += prob
+            intBoundsForUniformDrawing.append(denominator)
             
-        return probabilities, tokenSet, denominator
+        if denominator == 0.0:
+            print("Warning: denominator is zero, returning empty distribution.")
+            return [], [], tokenSet
+        
+        probabilities = [p / denominator for p in probabilities]  # Normalize probabilities
+                    
+        return probabilities, intBoundsForUniformDrawing, tokenSet
             
     
     
+    
+    def pickValueFromContinuousDistribution(self):
+        """
+        Pick a token value from the continuous distribution exp(-beta * t.value) for t.value in [0, inf) 
+        """
+        value = 0.0
+        
+        setChangeFlag = False
+        
+        if self.mode == "grandcanonical":
+            print("Warning: grandcanonical mode is not implemented  for the function pickValueFromContinuousDistribution. Use canonical mode instead.")     
+            self.mode = "canonical"
+            setChangeFlag = True
+        
+        if self.mode == "canonical":
+            uniformrandom = generateUniformFloats(self.rng, 1, 0.0, 1.0)
+            value = np.log(1 - self.beta * uniformrandom) / (- self.beta)
+
+        if setChangeFlag:
+            self.mode = "grandcanonical"
+            print("Mode changed to grandcanonical again within the function pickValueFromContinuousDistribution.")
+
+        return value 
+    
+    def pickValueFromContinuousDistributionWithinUpperBound(self, tValue ):
+        """
+        Pick a token value from the continuous distribution exp(-beta * t.value) for t.value in [0, tValue] 
+        """
+        value =  self.pickValueFromContinuousDistribution()
+        
+        if value > tValue:
+            multInteger =floor(value / tValue)
+            
+            value = value - multInteger*tValue
+        
+        if value < 0.0:
+            value = 0.0
+        
+        return value        
+        
     
     def setCanonical(self):
         """

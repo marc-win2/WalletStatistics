@@ -23,9 +23,9 @@ if __name__ == "__main__":
     tokenDenominationBuckets = tokens# np.append([0], tokens)
     print("tokenDenominationBuckets = ", tokenDenominationBuckets)
         
-    coinDistr = CoinSelectionDistribution(0.1, tokenDenominationBuckets)
-    print("coinDistr.muArray = ", coinDistr.muArray)
-    print("coinDistr.expectedTokenNoPerBucket = ", coinDistr.expn)
+    coinDistrTest = CoinSelectionDistribution(0.1, tokenDenominationBuckets)
+    print("coinDistr.muArray = ", coinDistrTest.muArray)
+    print("coinDistr.expectedTokenNoPerBucket = ", coinDistrTest.expn)
 
     
     a = Token(2.0, serialno=0)
