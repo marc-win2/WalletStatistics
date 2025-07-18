@@ -84,12 +84,16 @@ class CoinSelectionDistribution:
     
     
     
-    def pickValueFromContinuousDistribution(self):
+    def pickValueFromContinuousDistribution(self, b =None):
         """
         Pick a token value from the continuous distribution exp(-beta * t.value) for t.value in [0, inf) 
         """
         value = 0.0
         
+        if b is None:
+            b = self.beta
+
+
         setChangeFlag = False
         
         if self.mode == "grandcanonical":
@@ -99,7 +103,7 @@ class CoinSelectionDistribution:
         
         if self.mode == "canonical":
             uniformrandom = generateUniformFloats(self.rng, 1, 0.0, 1.0)
-            value = np.log(1 - self.beta * uniformrandom) / (- self.beta)
+            value = np.log(1 - b * uniformrandom) / (- b)
 
         if setChangeFlag:
             self.mode = "grandcanonical"

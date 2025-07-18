@@ -60,20 +60,103 @@ class SimulationHandler:
         
         if currentTransactionValue <= 0.0:
             print("Warning: current transaction value is zero or negative, no tokens can be selected for initialization.")
+            raise ValueError("Cannot initialize wallet with zero or negative transaction value.")
+            
+        initiationWallet = self.handleDeposit(depositValue=currentTransactionValue)
+
+        self.currentTransactionIndex += 1
+    
+    def handleDeposit(self, depositValue):
+        """
+        Handle a deposit transaction by adding tokens to the wallet.
+        """
+        if depositValue <= 0.0:
+            print("Deposit value must be positive.")
             return
         
-        
-        while currentTransactionValue > 0.0:
-            val = self.coinSelectionDistr.pickValueFromContinuousDistribution(currentTransactionValue)
+        depositWallet = Wallet()
+
+        while depositValue > 0.0:
+            val = self.coinSelectionDistr.pickValueFromContinuousDistribution(depositValue)
             token = Token(val, serialno=self.globalTokenIndex)
             self.highThroughputWallet.addToken(token)
+            depositWallet.addToken(token)
             self.globalTokenIndex += 1
-            currentTransactionValue -= val
+            depositValue -= val
         
+        if depositValue < 0.0:
+            val = self.highThroughputWallet.giveValue(self.globalTokenIndex - 1)
+            depositValue += val
+            self.highThroughputWallet.removeTokenBySno(self.globalTokenIndex - 1)
+            newToken = Token(depositValue, serialno=self.globalTokenIndex - 1)
+            self.highThroughputWallet.addToken(newToken)
+            depositWallet.addToken(newToken)
+
+        return depositWallet
+
+    def handlePayment(self, paymentValue):
+        """
+        Handle a payment transaction by selecting tokens from the wallet.
+        paymentValue should be negative, representing the amount to be paid.
+        """
+        if paymentValue >= 0.0:
+            print("Payment value must be negative.")
+            return
         
-        if 
+        remainingPaymentValue = -paymentValue
+        selectedTokens = []
         
-        self.currentTransactionIndex += 1
+        while remainingPaymentValue > 0.0:
+            selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(remainingPaymentValue)
+            if selectedToken is None:
+                print("No suitable token smaller than bill value found for payment.")
+                if self.highThroughputWallet.isEmpty():
+                    print("Wallet is empty, cannot proceed with payment.")
+                    raise ValueError("Wallet is empty, cannot proceed with payment.")
+                    return
+                else:
+                    selectRandom = self.highThroughputWallet.selectTokenRandomly()
+                    selectedToken = selectRandom
+                    selectTokenIndex = selectRandom.sno 
+            selectedTokens.append(selectedToken)
+            remainingPaymentValue -= selectedToken.value
+            
+            # Remove the token from the wallet
+            self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
+        
+        if remainingPaymentValue > 0.0:
+            print(f"Warning: Remaining payment value {remainingPaymentValue} could not be covered by available tokens.")
+        
+        return selectedTokens
+
+
+    def handleNextTransaction(self):
+        """
+        Handle the next transaction by selecting tokens from the wallet.
+        """
+        if self.currentTransactionIndex >= self.transactionSetSize:
+            print("No more transactions to handle.")
+            return
+        
+        currentTransactionValue = self.transactionSet[self.currentTransactionIndex]
+        
+        if np.abs(currentTransactionValue) < 1e-06:
+            self.currentTransactionIndex += 1    
+            return# Skip if the transaction value is effectively zero
+
+
+        if currentTransactionValue < 0.0: ### payment
+            self.handlePayment(paymentValue=currentTransactionValue)
+            self.currentTransactionIndex += 1
+            return
+            
+        
+        if currentTransactionValue > 0.0: ## deposit
+            self.handleDeposit(depositValue=currentTransactionValue)
+            self.currentTransactionIndex += 1
+            return
+
+
         
         
         

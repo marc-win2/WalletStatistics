@@ -35,3 +35,44 @@ class Wallet:
         return f"Wallet(tokens={self.tokens})"
     
 
+    def searchTokenBySno(self, serialno):
+        """
+        Search for a token by its serial number.
+        """
+        for token in self.tokens:
+            if token.sno == serialno:
+                return token
+        return None
+    
+    def selectTokenRandomly(self):
+        """
+        Select a token randomly from the wallet.
+        """
+        if not self.tokens:
+            return None
+        return np.random.choice(self.tokens)
+    
+    def removeTokenBySno(self, serialno):
+        """
+        Remove a token by its serial number.
+        """
+        self.tokens = [token for token in self.tokens if token.sno != serialno]
+        return self.tokens
+    
+    def giveValue(self,serialno):
+        """
+        Get the value of a token by its serial number.
+        """
+        token = self.searchTokenBySno(serialno)
+        if token is not None:
+            return token.value
+        else:
+            return None 
+        
+    def isEmpty(self):
+        """
+        Check if the wallet is empty.
+        """
+        return len(self.tokens) == 0
+    
+
