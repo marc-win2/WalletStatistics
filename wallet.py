@@ -69,6 +69,12 @@ class Wallet:
         else:
             return None 
         
+    def returnSize(self):
+        """
+        Return the number of tokens in the wallet.
+        """
+        return len(self.tokens)
+
     def isEmpty(self):
         """
         Check if the wallet is empty.

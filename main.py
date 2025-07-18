@@ -35,5 +35,8 @@ if __name__ == "__main__":
     wallet = Wallet([a, b])
     print(wallet)
     
+
+    simulate = SimulationHandler(tokenDenominationBuckets)
+    
     
     

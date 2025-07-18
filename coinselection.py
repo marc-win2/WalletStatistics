@@ -33,7 +33,7 @@ class CoinSelectionDistribution:
         
         
         
-        self.fixTokenNoGlobally(10.0)  # Example value, can be adjusted        
+        self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted        
             
     
     def compDenominatorDiscDistribution(self, tokenSet):
@@ -67,7 +67,7 @@ class CoinSelectionDistribution:
         intBoundsForUniformDrawing = []
         
         for i, token in enumerate(tokenSet):
-            val = token.value()
+            val = token.value
             prob = self.compProbability(val) 
             probabilities.append(prob)
             denominator += prob
@@ -145,7 +145,7 @@ class CoinSelectionDistribution:
             self.muArray = [np.log(expn) / beta + t for expn, t in zip(self.expn, self.tBucketBounds)]
 
     
-    def fixTokenNoGlobally(self, tokenNoFixed):
+    def fixExpTokenNoGlobally(self, tokenNoFixed):
         """
         Set a fixed number of tokens globally.
         """

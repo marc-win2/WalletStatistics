@@ -12,11 +12,11 @@ class SimulationHandler:
     def __init__(self, tokenDenominationBuckets):
         
         ### for transaction handling
-        self.transactionSet = [10000.0]        
+        self.transactionSet = [100000.0]        
         self.currentTransactionIndex = 0
         self.transactionSetSize = len(self.transactionSet)
-        self.coinCountPerTransaction = [0] * self.transactionSetSize
-        self.globalTokenIndex = 0
+        self.tokenCountPerTransaction = [0] * self.transactionSetSize
+        self.__globalTokenIndex = 0 # used to assign unique serial numbers to tokens!!!! Pay attention when changing this 
         
         
         
@@ -48,48 +48,70 @@ class SimulationHandler:
         return selectedToken, selectTokenIndex, sumOfProbs[-1]
          
 
+    def addTokenToOwnWallet(self, token):
+        """
+        Add a token to the wallet. This increments the global token index in the simulation.
+        """
+        self.highThroughputWallet.addToken(token)
+        self.__globalTokenIndex += 1
     
     def initiateWallet(self):
         """
         Initialize the wallet with a set of tokens.
         """
         self.highThroughputWallet = Wallet()
-        i = self.globalTokenIndex
+        i = self.__globalTokenIndex
         
         currentTransactionValue = self.transactionSet[self.currentTransactionIndex]
         
         if currentTransactionValue <= 0.0:
             print("Warning: current transaction value is zero or negative, no tokens can be selected for initialization.")
             raise ValueError("Cannot initialize wallet with zero or negative transaction value.")
-            
+
+        if self.currentTransactionIndex != 0:
+            print("Warning: currentTransactionIndex is not zero, this might lead to unexpected behavior.")
+        
+        if self.highThroughputWallet.isEmpty() == False:
+            print("Warning: Wallet is not empty, this might lead to unexpected behavior.")
+
         initiationWallet = self.handleDeposit(depositValue=currentTransactionValue)
+
+        self.tokenCountPerTransaction[self.currentTransactionIndex] = initiationWallet.returnSize()
 
         self.currentTransactionIndex += 1
     
     def handleDeposit(self, depositValue):
         """
         Handle a deposit transaction by adding tokens to the wallet.
+        Creates new tokens for the whole system and adds them to the wallet.
+        New serial numbers are assigned to the tokens.
+        the globalTokenIndex is incremented for each new token added.
         """
-        if depositValue <= 0.0:
+        if depositValue < 0.0:
             print("Deposit value must be positive.")
-            return
+            return Wallet()
+        
+        if np.abs(depositValue) < 1e-06:
+            print("Deposit value is effectively zero, no tokens will be added.")
+            return Wallet()
         
         depositWallet = Wallet()
 
         while depositValue > 0.0:
             val = self.coinSelectionDistr.pickValueFromContinuousDistribution(depositValue)
-            token = Token(val, serialno=self.globalTokenIndex)
-            self.highThroughputWallet.addToken(token)
+            token = Token(val, serialno=self.__globalTokenIndex)
+            self.addTokenToOwnWallet(token) # increment globalTokenIndex because a new token is added and sno are uniquely assigned
             depositWallet.addToken(token)
-            self.globalTokenIndex += 1
             depositValue -= val
+
         
         if depositValue < 0.0:
-            val = self.highThroughputWallet.giveValue(self.globalTokenIndex - 1)
+            val = self.highThroughputWallet.giveValue(self.__globalTokenIndex - 1) # it must be the last token added to the wallet which led to negative depositValue
             depositValue += val
-            self.highThroughputWallet.removeTokenBySno(self.globalTokenIndex - 1)
-            newToken = Token(depositValue, serialno=self.globalTokenIndex - 1)
-            self.highThroughputWallet.addToken(newToken)
+            self.highThroughputWallet.removeTokenBySno(self.__globalTokenIndex - 1)
+            self.depositWallet.removeTokenBySno(self.__globalTokenIndex - 1)
+            newToken = Token(depositValue, serialno=self.__globalTokenIndex - 1)
+            self.highThroughputWallet.addToken(newToken) # use the walletmemberfunction to add the token such that the globalTokenIndex is not incremented again
             depositWallet.addToken(newToken)
 
         return depositWallet
@@ -104,7 +126,7 @@ class SimulationHandler:
             return
         
         remainingPaymentValue = -paymentValue
-        selectedTokens = []
+        selectedWallet = Wallet()
         
         while remainingPaymentValue > 0.0:
             selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(remainingPaymentValue)
@@ -118,7 +140,7 @@ class SimulationHandler:
                     selectRandom = self.highThroughputWallet.selectTokenRandomly()
                     selectedToken = selectRandom
                     selectTokenIndex = selectRandom.sno 
-            selectedTokens.append(selectedToken)
+            selectedWallet.addToken(selectedToken)
             remainingPaymentValue -= selectedToken.value
             
             # Remove the token from the wallet
@@ -127,7 +149,7 @@ class SimulationHandler:
         if remainingPaymentValue > 0.0:
             print(f"Warning: Remaining payment value {remainingPaymentValue} could not be covered by available tokens.")
         
-        return selectedTokens
+        return selectedWallet
 
 
     def handleNextTransaction(self):
@@ -144,18 +166,16 @@ class SimulationHandler:
             self.currentTransactionIndex += 1    
             return# Skip if the transaction value is effectively zero
 
-
+        newTokens = None
         if currentTransactionValue < 0.0: ### payment
-            self.handlePayment(paymentValue=currentTransactionValue)
+            removedTokens = self.handlePayment(paymentValue=currentTransactionValue)
             self.currentTransactionIndex += 1
-            return
             
         
         if currentTransactionValue > 0.0: ## deposit
-            self.handleDeposit(depositValue=currentTransactionValue)
-            self.currentTransactionIndex += 1
-            return
+            newTokens = self.handleDeposit(depositValue=currentTransactionValue)
 
+        self.currentTransactionIndex += 1
 
         
         
@@ -168,6 +188,7 @@ class SimulationHandler:
     def setTransactionsForSimulation(self, transactions):
         """
         Set the transactions for the simulation.
+        Currently not used, because wallet is typically initialized with a single transaction, which can then be prolonged.
         """
         self.transactionSet = transactions
         self.transactionSetSize = len(self.transactionSet)
@@ -176,7 +197,7 @@ class SimulationHandler:
         
     def prolongTransactionSet(self, newTransactions):
         """
-        Prolong the transaction set with new transactions.
+        Prolong the transaction set with new transactions. Typically used because the transaction set is initialized with a single transaction.
         """
         self.transactionSet.extend(newTransactions)
         self.transactionSetSize = len(self.transactionSet)
