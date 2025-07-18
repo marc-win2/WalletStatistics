@@ -48,6 +48,13 @@ class SimulationHandler:
         return selectedToken, selectTokenIndex, sumOfProbs[-1]
          
 
+    def addTokenToWallet(self, tokenval):
+        """
+        Add a token to the wallet.
+        """
+        token = Token(tokenval, serialno=self.globalTokenIndex)
+        self.highThroughputWallet.addToken(token)
+        self.globalTokenIndex += 1
     
     def initiateWallet(self):
         """
@@ -62,16 +69,20 @@ class SimulationHandler:
             print("Warning: current transaction value is zero or negative, no tokens can be selected for initialization.")
             return
         
+        tokenCount = 0
         
         while currentTransactionValue > 0.0:
-            val = self.coinSelectionDistr.pickValueFromContinuousDistribution(currentTransactionValue)
-            token = Token(val, serialno=self.globalTokenIndex)
-            self.highThroughputWallet.addToken(token)
-            self.globalTokenIndex += 1
+            val = self.coinSelectionDistr.pickValueFromContinuousDistributionWithinUpperBound(currentTransactionValue)
             currentTransactionValue -= val
+            tokenCount += 1
+            if tokenCount > 1000 or currentTransactionValue < 0.0: 
+                self.addTokenToWallet(currentTransactionValue) # Add the remaining value as a token
+                break
+            else:
+                self.addTokenToWallet(val)
         
         
-        if 
+        raise ValueError("Wallet initialization failed, not fully implemented yet!!! What happens for overshooting?")
         
         self.currentTransactionIndex += 1
         
