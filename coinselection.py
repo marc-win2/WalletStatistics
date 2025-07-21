@@ -19,9 +19,9 @@ class CoinSelectionDistribution:
     Class to handle coin selection distribution calculations.
     """
     def __init__(self, beta, tokenDenominationBuckets):
-        self.beta = beta  # Inverse temperature
+        self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
-        self.muArray = []
+        self.betaMuArray = []
         self.expn = []
         self.mode = "grandcanonical"
         
@@ -103,13 +103,13 @@ class CoinSelectionDistribution:
         
         if self.mode == "canonical":
             uniformrandom = generateUniformFloats(self.rng, 1, 0.0, 1.0)
-            value = np.log(1 - b * uniformrandom) / (- b)
+            value = - np.log(1.0 - uniformrandom[0]) 
 
         if setChangeFlag:
             self.mode = "grandcanonical"
             print("Mode changed to grandcanonical again within the function pickValueFromContinuousDistribution.")
 
-        return value 
+        return value / b
     
     def pickValueFromContinuousDistributionWithinUpperBound(self, tValue ):
         """
@@ -125,15 +125,33 @@ class CoinSelectionDistribution:
         if value < 0.0:
             value = 0.0
         
-        return value        
+        return value      
+
+    def pickValueFromContinuousDistributionWithVariableBeta(self, b):
+        """
+        Pick a token value from the continuous distribution exp(-beta * t.value) for t.value in [0, inf) with variable beta.
+        """
+        value = 0.0
+        originalbeta = self.beta
+        self.beta = b
+        value = self.pickValueFromContinuousDistribution()
+        self.beta = originalbeta  # Reset beta to its original value
+
+        return value 
         
+    def pickValueFromContinuousDistributionWithBetaAdjustment(self, value):
+        """
+        Pick a token value from the continuous distribution exp(-beta * t.value)with beta adjustment such that mean is equal to 0.1*value
+        """
+        beta = 1.0 / (0.1 * value)  # Adjust beta such that the mean is equal to 0.1 * value
+        return self.pickValueFromContinuousDistributionWithVariableBeta(beta)
     
     def setCanonical(self):
         """
         Set the mode to canonical.
         """
         self.mode = "canonical"
-        self.muArray = [0.0] * len(self.tBucketBounds)
+        self.betaMuArray = [0.0] * len(self.tBucketBounds)
         self.expn = [] 
         
     def setBeta(self, beta):
@@ -142,7 +160,7 @@ class CoinSelectionDistribution:
         """
         self.beta = beta
         if self.mode == "grandcanonical":    
-            self.muArray = [np.log(expn) / beta + t for expn, t in zip(self.expn, self.tBucketBounds)]
+            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
 
     
     def fixExpTokenNoGlobally(self, tokenNoFixed):
@@ -150,7 +168,7 @@ class CoinSelectionDistribution:
         Set a fixed number of tokens globally.
         """
         self.expn = [tokenNoFixed] * len(self.tBucketBounds)
-        self.muArray = [np.log(expn) / self.beta + t for expn, t in zip(self.expn, self.tBucketBounds)]
+        self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
 
 
     def probabilityGrandCanonical(self, tokenValue):
@@ -161,10 +179,10 @@ class CoinSelectionDistribution:
             return 0.0
         
         bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='right') 
-        if bucketIndex < 0 or bucketIndex >= len(self.muArray):
+        if bucketIndex < 0 or bucketIndex >= len(self.betaMuArray):
             return 0.0
         
-        mu = self.muArray[bucketIndex]
+        mu = self.betaMuArray[bucketIndex] / self.beta
         energy = tokenValue
         return BoltzmannDistribution(energy, self.beta, mu)
     
