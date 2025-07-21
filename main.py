@@ -24,6 +24,36 @@ def coinSelectionDistributionTest():
     print("coinDistr.muArray = ", coinDistrTest.betaMuArray)
     print("coinDistr.expectedTokenNoPerBucket = ", coinDistrTest.expn)
 
+def simulationTest(tokenDenominationBuckers):
+    simulate = SimulationHandler(tokenDenominationBuckets, 1e-03, drawDepositToken=False)
+    simulate.coinSelectionDistr.setCanonical()
+    print("SimulationHandler initialized.")
+    print("simulate.highThroughputWallet = ", simulate.highThroughputWallet.getTokenCount())
+    print("simulate.highThroughputWallet = ", simulate.highThroughputWallet)    
+    print("simulate.highThroughputWallet.getTotalValue() = ", simulate.highThroughputWallet.getTotalValue())
+
+    simulate.prolongTransactionSet(transactions)
+    print("simulate.transactionSetSize = ", simulate.transactionSetSize)
+    print("simulate.tokenCountPerTransaction[0] = ", simulate.tokenCountPerTransaction[0])
+
+    print("now simulate 5 transactions, namely", simulate.transactionSet[1:6])
+
+    simulate.handleNextTransaction()    
+    print(simulate.highThroughputWallet)
+
+    simulate.handleNextTransaction()    
+    print(simulate.highThroughputWallet)
+
+    simulate.handleNextTransaction()       
+    print(simulate.highThroughputWallet)
+
+    simulate.handleNextTransaction()   
+    print(simulate.highThroughputWallet)
+
+    simulate.handleNextTransaction()    
+    print(simulate.highThroughputWallet)
+
+
 
 if __name__ == "__main__":
     tokens =  [2**i for i in range(0, 30)]
@@ -51,11 +81,12 @@ if __name__ == "__main__":
     deposit_idx = 0
     payment_idx = 0
     while deposit_idx + 3 <= len(deposits) and payment_idx < len(payments):
+        transactions.append(payments[payment_idx])
+
         # Add xFactor deposits
         transactions.extend(deposits[deposit_idx:deposit_idx+xFactor])
         deposit_idx += 3
         # Add one payment
-        transactions.append(payments[payment_idx])
         payment_idx += 1
     print("len(transactions) = ", len(transactions))
 
@@ -72,11 +103,6 @@ if __name__ == "__main__":
             
 
 
-    simulate = SimulationHandler(tokenDenominationBuckets, 1e-03, False)
-    simulate.coinSelectionDistr.setCanonical()
-    print("SimulationHandler initialized.")
-    print("simulate.highThroughputWallet = ", simulate.highThroughputWallet.returnSize())
-    print("simulate.highThroughputWallet = ", simulate.highThroughputWallet)    
-    
-    
+ 
+    simulationTest(tokenDenominationBuckets)
     

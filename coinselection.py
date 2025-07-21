@@ -61,11 +61,12 @@ class CoinSelectionDistribution:
         Denominator  contains \sum_t exp(-beta * t.value) for the distribution of a set of tokens (does not use the function removeTokensHigherThanTransactionValue to optimize computation time).
         intBoundsForUniformDrawing builds intervals such that a uniform random number can be drawn from [0, denominator] and the corresponding token can be selected.
         """
-        tokenSet = self.removeTokensHigherThanTransactionValue(tokenSetInWallet, transactionValue)
+        #tokenSet = self.removeTokensHigherThanTransactionValue(tokenSetInWallet, transactionValue)
+        tokenSet = tokenSetInWallet
         denominator = 0.0
         probabilities = [] # list of all p(t.value) = exp(-beta *t.value) for all token in tokenSet (i.e., only those with value > 0.0 and <= transactionValue)
         intBoundsForUniformDrawing = []
-        
+
         for i, token in enumerate(tokenSet):
             val = token.value
             prob = self.compProbability(val) 

@@ -59,7 +59,7 @@ class Wallet:
         self.tokens = [token for token in self.tokens if token.sno != serialno]
         return self.tokens
     
-    def giveValue(self,serialno):
+    def getTokenValue(self,serialno):
         """
         Get the value of a token by its serial number.
         """
@@ -69,11 +69,17 @@ class Wallet:
         else:
             return None 
         
-    def returnSize(self):
+    def getTokenCount(self):
         """
         Return the number of tokens in the wallet.
         """
         return len(self.tokens)
+    
+    def getTotalValue(self):
+        """
+        Get the total value of all tokens in the wallet.
+        """
+        return sum(token.value for token in self.tokens)
 
     def isEmpty(self):
         """

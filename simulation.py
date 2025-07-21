@@ -9,16 +9,21 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawToken = False):
+    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False):
         ### for transaction handling
-        self.transactionSet = [100000.0]        
+        self.transactionSet = [100000.0]      
+        self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
+        self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
+
+
         self.currentTransactionIndex = 0
         self.transactionSetSize = len(self.transactionSet)
-        self.tokenCountPerTransaction = [0] * self.transactionSetSize
+        self.tokenCountPerTransaction = [None] * self.transactionSetSize
         self.__globalTokenIndex = 0 # used to assign unique serial numbers to tokens!!!! Pay attention when changing this 
-        self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
-        
-        if drawToken:
+
+
+
+        if drawDepositToken:
             self.depositMode = "drawtokenFlexibleBeta"
         
     
@@ -28,18 +33,26 @@ class SimulationHandler:
         
         
         self.initiateWallet()  # Initialize the wallet with a set of tokens
+    
+    def simulateCurrentTransactionSet(self):
+        """
+        Simulate the current transaction set.
+        """
+        while self.currentTransactionIndex < self.transactionSetSize:
+            self.handleNextTransaction()
+        
+        print("Simulation completed.")
 
     def selectTokenFromDistribtion(self,transactionValue):
         """
         Select a token from the distribution based on the transaction value.
         """
         probs, sumOfProbs, redTokenSet = self.coinSelectionDistr.compDistributionDiscrSet(self.highThroughputWallet.tokens, transactionValue) # redTokenSet is the reduced token set with values <= transactionValue, sumOfProbs[i] contains the sum of probabilities for all tokens up to index i in redTokenSet, probs[i] contains the probability for the token at index i in redTokenSet
-        
-        
+                
         rng = initializeRandomNumGenerator()
         randomFloat = generateUniformFloats(rng, 1, 0.0, sumOfProbs[-1]) # generate a random float in the range [0, sumOfProbs[-1]) where sumOfProbs[-1] is the sum of all probabilities
         
-        selectTokenIndex = np.searchsorted(sumOfProbs, randomFloat) # find the index of the token in redTokenSet that corresponds to the random float
+        selectTokenIndex = np.searchsorted(sumOfProbs, randomFloat)[0] # find the index of the token in redTokenSet that corresponds to the random float
         if selectTokenIndex >= len(redTokenSet):
             selectTokenIndex = len(redTokenSet) - 1
         
@@ -54,6 +67,9 @@ class SimulationHandler:
         """
         self.highThroughputWallet.addToken(token)
         self.__globalTokenIndex += 1
+
+    def adjustBetaMicrocanonically(self):
+        self.beta = self.highThroughputWallet.getTokenCount() / self.highThroughputWallet.getTotalValue()
     
     def initiateWallet(self):
         """
@@ -76,9 +92,13 @@ class SimulationHandler:
 
         initiationWallet = self.handleDeposit(depositValue=currentTransactionValue)
 
-        self.tokenCountPerTransaction[self.currentTransactionIndex] = initiationWallet.returnSize()
+        self.tokenCountPerTransaction[self.currentTransactionIndex] = initiationWallet.getTokenCount()
 
         self.currentTransactionIndex += 1
+
+        if self.adjustBetaAfterEachTransaction:
+            self.adjustBetaMicrocanonically
+            
     
     def handleDeposit(self, depositValue):
         """
@@ -115,7 +135,7 @@ class SimulationHandler:
 
         
             if depositValue < 0.0:
-                val = self.highThroughputWallet.giveValue(self.__globalTokenIndex - 1) # it must be the last token added to the wallet which led to negative depositValue
+                val = self.highThroughputWallet.getTokenValue(self.__globalTokenIndex - 1) # it must be the last token added to the wallet which led to negative depositValue
                 depositValue += val
                 self.highThroughputWallet.removeTokenBySno(self.__globalTokenIndex - 1)
                 depositWallet.removeTokenBySno(self.__globalTokenIndex - 1)
@@ -150,13 +170,16 @@ class SimulationHandler:
                     selectedToken = selectRandom
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)
+            self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
             remainingPaymentValue -= selectedToken.value
             
-            # Remove the token from the wallet
-            self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
         
         if remainingPaymentValue > 0.0:
             print(f"Warning: Remaining payment value {remainingPaymentValue} could not be covered by available tokens.")
+        if remainingPaymentValue < 0.0:
+            token = Token(-remainingPaymentValue, serialno=self.__globalTokenIndex)
+            self.addTokenToOwnWallet(token)  # Add the remaining value as a new token
+            selectedWallet.addToken(token)
         
         return selectedWallet
 
@@ -178,13 +201,15 @@ class SimulationHandler:
         newTokens = None
         if currentTransactionValue < 0.0: ### payment
             removedTokens = self.handlePayment(paymentValue=currentTransactionValue)
-            self.tokenCountPerTransaction[self.currentTransactionIndex] = removedTokens.returnSize()
-            self.currentTransactionIndex += 1
+            self.tokenCountPerTransaction[self.currentTransactionIndex] = removedTokens.getTokenCount()
             
         
         if currentTransactionValue > 0.0: ## deposit
             newTokens = self.handleDeposit(depositValue=currentTransactionValue)
-            self.tokenCountPerTransaction[self.currentTransactionIndex] = newTokens.returnSize()
+            self.tokenCountPerTransaction[self.currentTransactionIndex] = newTokens.getTokenCount()
+        
+        if self.adjustBetaAfterEachTransaction:
+            self.adjustBetaMicrocanonically()
 
         self.currentTransactionIndex += 1
 
@@ -203,7 +228,7 @@ class SimulationHandler:
         """
         self.transactionSet = transactions
         self.transactionSetSize = len(self.transactionSet)
-        self.coinCountPerTransaction = [0] * self.transactionSetSize
+        self.tokenCountPerTransaction = [None] * self.transactionSetSize
         self.currentTransactionIndex = 0
         
     def prolongTransactionSet(self, newTransactions):
@@ -212,5 +237,5 @@ class SimulationHandler:
         """
         self.transactionSet.extend(newTransactions)
         self.transactionSetSize = len(self.transactionSet)
-        self.coinCountPerTransaction.extend([0] * len(newTransactions))
+        self.tokenCountPerTransaction.extend([None] * len(newTransactions))
         
