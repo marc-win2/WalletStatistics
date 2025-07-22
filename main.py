@@ -24,7 +24,7 @@ def coinSelectionDistributionTest():
     print("coinDistr.muArray = ", coinDistrTest.betaMuArray)
     print("coinDistr.expectedTokenNoPerBucket = ", coinDistrTest.expn)
 
-def simulationTest(tokenDenominationBuckers):
+def simulationTest(tokenDenominationBuckers,  transactions):
     simulate = SimulationHandler(tokenDenominationBuckets, 1e-03, drawDepositToken=False)
     simulate.coinSelectionDistr.setCanonical()
     print("SimulationHandler initialized.")
@@ -36,23 +36,16 @@ def simulationTest(tokenDenominationBuckers):
     print("simulate.transactionSetSize = ", simulate.transactionSetSize)
     print("simulate.tokenCountPerTransaction[0] = ", simulate.tokenCountPerTransaction[0])
 
-    print("now simulate 5 transactions, namely", simulate.transactionSet[1:6])
+    print("now simulate 9 transactions, namely", simulate.transactionSet[1:10])
 
-    simulate.handleNextTransaction()    
+    i = 0
+    while i < 10:
+        simulate.handleNextTransaction()
+        print(simulate.highThroughputWallet)
+        i += 1
+    simulate.highThroughputWallet.removeTokenBySno(3)
+    print("After removing token with serial number 3:")
     print(simulate.highThroughputWallet)
-
-    simulate.handleNextTransaction()    
-    print(simulate.highThroughputWallet)
-
-    simulate.handleNextTransaction()       
-    print(simulate.highThroughputWallet)
-
-    simulate.handleNextTransaction()   
-    print(simulate.highThroughputWallet)
-
-    simulate.handleNextTransaction()    
-    print(simulate.highThroughputWallet)
-
 
 
 if __name__ == "__main__":
@@ -69,7 +62,7 @@ if __name__ == "__main__":
      # signature of generateNTransactionsGaussian(n, stdDev, mean), transactions can in principle be 
      # negative and positive, corresponding to deposits and withdrawals
     xFactor = 3
-    noPayments = 1000
+    noPayments = 100000
     deposits = transactionGenerator.generateNTransactionsGaussian(xFactor*noPayments, 250, 1000)
     print("deposits= " , np.mean(deposits), "+-" ,np.std(deposits))
     payments = transactionGenerator.generateNTransactionsGaussian(noPayments, 500, -3000)
@@ -89,6 +82,7 @@ if __name__ == "__main__":
         # Add one payment
         payment_idx += 1
     print("len(transactions) = ", len(transactions))
+    print("Mean of transactions = ", np.mean(transactions), "+-", np.std(transactions))
 
     plt.hist(deposits, bins=200, density=False, alpha=0.7, color='blue', label='Deposits')
     plt.hist(payments, bins=200, density=False, alpha=0.7, color='red', label='Payments')
@@ -96,13 +90,48 @@ if __name__ == "__main__":
     plt.xlabel('Value')
     plt.legend()
     plt.savefig('Data/transactions_histogram.png')
+    plt.clf()  # Clear the current figure
     with open('Data/transaction.dat', 'w') as f:
         for t in transactions:
             f.write(f"{t}\n")
     
-            
-
-
- 
-    simulationTest(tokenDenominationBuckets)
+    #simulationTest(tokenDenominationBuckets, transactions)
+    simulation = SimulationHandler(tokenDenominationBuckets, 1e-03, drawDepositToken=False)
+    simulation.coinSelectionDistr.setCanonical()
+    print("SimulationHandler initialized.")
+    print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
     
+    simulation.prolongTransactionSet(transactions)
+    print("first 3 transactions in the set:", simulation.transactionSet[:3])
+    simulation.handleNextTransaction()  # Process the first transaction
+    print("After processing first transaction:")
+    print(simulation.highThroughputWallet)
+    print("Total value in wallet:", simulation.highThroughputWallet.getTotalValue())
+    simulation.handleNextTransaction()  # Process the second transaction
+    print("After processing second transaction:")
+    print(simulation.highThroughputWallet)
+    print("Total value in wallet:", simulation.highThroughputWallet.getTotalValue())
+    simulation.handleNextTransaction()  # Process the third transaction
+    print("After processing third transaction:")
+    print(simulation.highThroughputWallet)
+    print("Total value in wallet:", simulation.highThroughputWallet.getTotalValue())
+    print("Token count in wallet:", simulation.highThroughputWallet.getTokenCount())
+
+
+    simulation.simulateCurrentTransactionSet()
+    print(simulation.highThroughputWallet)
+    print(simulation.highThroughputWallet.getTotalValue())
+    print(simulation.highThroughputWallet.getTokenCount())
+    maxval = max(token.value for token in simulation.highThroughputWallet.tokens)
+    print("Maximal token value in wallet:", maxval  )
+
+    vals = [token.value for token in simulation.highThroughputWallet.tokens]
+
+    vals.remove(maxval) 
+    plt.hist(vals, bins=200,density=False)
+    plt.title("Histogram of Token Values in Wallet after Simulation")
+    plt.xlabel("Token Value")
+    plt.savefig('Data/token_values_histogram.png')
+    with open('Data/token_values.dat', 'w') as f:
+        for v in vals:
+            f.write(f"{v}\n")

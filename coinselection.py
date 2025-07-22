@@ -56,12 +56,10 @@ class CoinSelectionDistribution:
     def compDistributionDiscrSet(self, tokenSetInWallet, transactionValue):
         """
         Compute the coin selection distribution for a set of tokens, given a fixed transaction value.
-        First, all tokens with value > 0.0 and <= transactionValue are selected.
-        Then, the probabilities are computed as p(t.value) = exp(-beta * t.value)
+        the probabilities are computed as p(t.value) = exp(-beta * t.value)
         Denominator  contains \sum_t exp(-beta * t.value) for the distribution of a set of tokens (does not use the function removeTokensHigherThanTransactionValue to optimize computation time).
         intBoundsForUniformDrawing builds intervals such that a uniform random number can be drawn from [0, denominator] and the corresponding token can be selected.
         """
-        #tokenSet = self.removeTokensHigherThanTransactionValue(tokenSetInWallet, transactionValue)
         tokenSet = tokenSetInWallet
         denominator = 0.0
         probabilities = [] # list of all p(t.value) = exp(-beta *t.value) for all token in tokenSet (i.e., only those with value > 0.0 and <= transactionValue)
@@ -75,12 +73,27 @@ class CoinSelectionDistribution:
             intBoundsForUniformDrawing.append(denominator)
             
         if denominator == 0.0:
-            print("Warning: denominator is zero, returning empty distribution.")
+            print("Warning: denominator is zero.")
+            if tokenSet == []:
+                print("Warning: tokenSet is empty, returning empty distribution.")
+                print("    tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "transactionValue = ", transactionValue, "probs = ", probabilities, "intBoundsForUniformDrawing = ", intBoundsForUniformDrawing)
+                return [], [], tokenSet
+            else:
+                print("TokenSet is not empty, but all probabilities are zero. Often, this happens when tokens have very high values. Return uniform distribution.")
+                print("   tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "probs = ", probabilities)
+                denominator = 1.0  # Set to 1.0 to avoid division by zero
+                probabilities = [1.0 / len(tokenSet)] * len(tokenSet)
+                intBoundsForUniformDrawing = [i / len(tokenSet) for i in range(1, len(tokenSet) + 1)]
+
+
+        if tokenSet == []:
+            print("Warning: tokenSet is empty, returning empty distribution.")
+            print("   tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "transactionValue = ", transactionValue, "probs = ", probabilities, "intBoundsForUniformDrawing = ", intBoundsForUniformDrawing)
             return [], [], tokenSet
         
         probabilities = [p / denominator for p in probabilities]  # Normalize probabilities
                     
-        return probabilities, intBoundsForUniformDrawing, tokenSet
+        return probabilities, intBoundsForUniformDrawing
             
     
     
@@ -176,7 +189,7 @@ class CoinSelectionDistribution:
         """
         Compute the distribution for a given token value.
         """
-        if tokenValue < self.tBucketBounds[0] or tokenValue >= self.tBucketBounds[-1]:
+        if tokenValue < 0.0 or tokenValue >= self.tBucketBounds[-1]:
             return 0.0
         
         bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='right') 
@@ -191,7 +204,7 @@ class CoinSelectionDistribution:
         """
         Compute the canonical distribution for a given token value.
         """
-        if tokenValue < self.tBucketBounds[0] or tokenValue >= self.tBucketBounds[-1]:
+        if tokenValue < 0.0 or tokenValue >= self.tBucketBounds[-1]:
             return 0.0
         energy = tokenValue
         return BoltzmannDistribution(energy, self.beta, 0.0)

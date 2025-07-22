@@ -21,6 +21,7 @@ class SimulationHandler:
         self.tokenCountPerTransaction = [None] * self.transactionSetSize
         self.__globalTokenIndex = 0 # used to assign unique serial numbers to tokens!!!! Pay attention when changing this 
 
+        self.ownrng = initializeRandomNumGenerator()
 
 
         if drawDepositToken:
@@ -33,6 +34,8 @@ class SimulationHandler:
         
         
         self.initiateWallet()  # Initialize the wallet with a set of tokens
+
+        self.timeCounter = 0
     
     def simulateCurrentTransactionSet(self):
         """
@@ -47,16 +50,18 @@ class SimulationHandler:
         """
         Select a token from the distribution based on the transaction value.
         """
-        probs, sumOfProbs, redTokenSet = self.coinSelectionDistr.compDistributionDiscrSet(self.highThroughputWallet.tokens, transactionValue) # redTokenSet is the reduced token set with values <= transactionValue, sumOfProbs[i] contains the sum of probabilities for all tokens up to index i in redTokenSet, probs[i] contains the probability for the token at index i in redTokenSet
-                
-        rng = initializeRandomNumGenerator()
-        randomFloat = generateUniformFloats(rng, 1, 0.0, sumOfProbs[-1]) # generate a random float in the range [0, sumOfProbs[-1]) where sumOfProbs[-1] is the sum of all probabilities
+
+        probs, sumOfProbs = self.coinSelectionDistr.compDistributionDiscrSet(self.highThroughputWallet.tokens, transactionValue) # redTokenSet is the reduced token set with values <= transactionValue, sumOfProbs[i] contains the sum of probabilities for all tokens up to index i in redTokenSet, probs[i] contains the probability for the token at index i in redTokenSet
+        if sumOfProbs == []:
+            print("Warning: sumOfProbs is empty, returning None.")
+            print("    tokenSet = ", self.highThroughputWallet.tokens, "transactionValue = ", transactionValue, "probs = ", probs, "sumOfProbs = ", sumOfProbs)
+
+        randomFloat = generateUniformFloats(self.ownrng, 1, 0.0, sumOfProbs[-1]) # generate a random float in the range [0, sumOfProbs[-1]) where sumOfProbs[-1] is the sum of all probabilities
         
         selectTokenIndex = np.searchsorted(sumOfProbs, randomFloat)[0] # find the index of the token in redTokenSet that corresponds to the random float
-        if selectTokenIndex >= len(redTokenSet):
-            selectTokenIndex = len(redTokenSet) - 1
+
         
-        selectedToken = redTokenSet[selectTokenIndex]
+        selectedToken = self.highThroughputWallet.tokens[selectTokenIndex] if selectTokenIndex < len(self.highThroughputWallet.tokens) else [] # select the token from the wallet based on the index
         
         return selectedToken, selectTokenIndex, sumOfProbs[-1]
          
@@ -154,12 +159,23 @@ class SimulationHandler:
             print("Payment value must be negative.")
             return
         
+        freezeOverallWallet = self.highThroughputWallet.tokens
         remainingPaymentValue = -paymentValue
         selectedWallet = Wallet()
         
         while remainingPaymentValue > 0.0:
+            if self.highThroughputWallet.isEmpty():
+                print("Wallet is empty, cannot proceed with payment.")
+                print("Overall payment value was", -paymentValue)
+                print("Previous payment value was ", prevPaymentValue)
+                print("Selected tokens are", selectedWallet)
+                print("Their sum is", selectedWallet.getTotalValue())
+                print("Remaining payment value is", remainingPaymentValue   )
+                print("Previous selected token was", selectedToken  )
+                print("Old wallet tokens were", freezeOverallWallet)
+                print("current transaction index is", self.currentTransactionIndex)
             selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(remainingPaymentValue)
-            if selectedToken is None:
+            if selectedToken == []:
                 print("No suitable token smaller than bill value found for payment.")
                 if self.highThroughputWallet.isEmpty():
                     print("Wallet is empty, cannot proceed with payment.")
@@ -171,6 +187,7 @@ class SimulationHandler:
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)
             self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
+            prevPaymentValue = remainingPaymentValue
             remainingPaymentValue -= selectedToken.value
             
         
@@ -212,9 +229,13 @@ class SimulationHandler:
             self.adjustBetaMicrocanonically()
 
         self.currentTransactionIndex += 1
-
-        
-        
+        self.trackMaximalTokenValue = max([t.value for t in self.highThroughputWallet.tokens])
+        if self.highThroughputWallet.getTokenCount() < 3 and self.timeCounter < 10 and self.currentTransactionIndex > 15:
+            print("Warning: Maximal token value in wallet is less than 10^4, this might lead to unexpected behavior.")
+            print("Maximal token value in wallet is", self.trackMaximalTokenValue)
+            print("Current transaction index is", self.currentTransactionIndex)
+            print("Current wallet tokens are", self.highThroughputWallet.tokens)
+            self.timeCounter += 1    
         
         
         
