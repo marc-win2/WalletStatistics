@@ -18,24 +18,33 @@ class CoinSelectionDistribution:
     """
     Class to handle coin selection distribution calculations.
     """
-    def __init__(self, beta, tokenDenominationBuckets):
+    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
         self.betaMuArray = []
         self.expn = []
-        self.mode = "grandcanonical"
-        
+        self.mode = distMode # can be "grandcanonical" or "canonical", or "uniform"
+        self.warnaboutZeroProbabilities = False  # Flag to warn about zero probabilities
+
         self.rng = initializeRandomNumGenerator()
+
         
         if beta == 0.0:
-            print("Warning: beta is zero, currently not possible (should become a uniform distribution in general). Set to 1.0")
-            self.beta = 1.0
-        
-        
-        
-        self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted        
-            
-    
+            print("Warning: beta is zero, corresponds to uniform distribution. Set to mode uniform.")
+            self.beta = 0.0
+            self.mode = "uniform"
+            self.betaMuArray = [0.0] * len(self.tBucketBounds)
+            self.expn = []
+        else:
+            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
+        if self.mode == "grandcanonical":
+            self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted
+        if self.mode == "canonical":
+            self.setCanonical()
+        if self.mode == "uniform":
+            self.setUniform()
+
+
     def compDenominatorDiscDistribution(self, tokenSet):
         """
         Compute the denominator for the coin selection distribution.
@@ -73,14 +82,16 @@ class CoinSelectionDistribution:
             intBoundsForUniformDrawing.append(denominator)
             
         if denominator == 0.0:
-            print("Warning: denominator is zero.")
             if tokenSet == []:
+                print("Warning: denominator is zero.")
                 print("Warning: tokenSet is empty, returning empty distribution.")
                 print("    tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "transactionValue = ", transactionValue, "probs = ", probabilities, "intBoundsForUniformDrawing = ", intBoundsForUniformDrawing)
                 return [], [], tokenSet
-            else:
-                print("TokenSet is not empty, but all probabilities are zero. Often, this happens when tokens have very high values. Return uniform distribution.")
-                print("   tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "probs = ", probabilities)
+            else: 
+                if self.warnaboutZeroProbabilities:
+                    print("Warning: denominator is zero.")
+                    print("TokenSet is not empty, but all probabilities are zero. Often, this happens when tokens have very high values. Return uniform distribution.")
+                    print("   tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "probs = ", probabilities)
                 denominator = 1.0  # Set to 1.0 to avoid division by zero
                 probabilities = [1.0 / len(tokenSet)] * len(tokenSet)
                 intBoundsForUniformDrawing = [i / len(tokenSet) for i in range(1, len(tokenSet) + 1)]
@@ -167,6 +178,15 @@ class CoinSelectionDistribution:
         self.mode = "canonical"
         self.betaMuArray = [0.0] * len(self.tBucketBounds)
         self.expn = [] 
+
+    def setUniform(self):
+        """
+        Set the mode to uniform.
+        """
+        self.mode = "uniform"
+        self.betaMuArray = [0.0] * len(self.tBucketBounds)
+        self.expn = []
+        self.beta = 0.0
         
     def setBeta(self, beta):
         """
@@ -174,15 +194,19 @@ class CoinSelectionDistribution:
         """
         self.beta = beta
         if self.mode == "grandcanonical":    
-            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
-
+            self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted
     
     def fixExpTokenNoGlobally(self, tokenNoFixed):
         """
         Set a fixed number of tokens globally.
         """
-        self.expn = [tokenNoFixed] * len(self.tBucketBounds)
-        self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
+        if self.mode != "grandcanonical":
+            self.expn = []
+            self.betaMuArray = [0.0] * len(self.tBucketBounds)
+
+        else:
+            self.expn = [tokenNoFixed] * len(self.tBucketBounds)
+            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
 
 
     def probabilityGrandCanonical(self, tokenValue):
@@ -218,6 +242,8 @@ class CoinSelectionDistribution:
             return self.probabilityGrandCanonical(tokenValue)
         if self.mode == "canonical":
             return self.probabilityCanonical(tokenValue)
+        if self.mode == "uniform":
+            return 0.1 # Uniform distribution, return a constant probability, use smaller value for the case of many tokens 
         else:
             raise NotImplementedError("Only canonical mode is implemented.")
         

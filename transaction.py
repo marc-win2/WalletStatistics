@@ -31,7 +31,11 @@ def generateGaussianFloats(rng, n, mean=0.0, stdDev=1.0):
     """
     return rng.normal(loc=mean, scale=stdDev, size=n)
 
-
+def generateDirichtletFloats(rng, n, alpha):
+    """
+    Generate n Dirichlet distributed floats with given alpha parameter.
+    """
+    return rng.dirichlet(alpha, size=n)
 
 class RandomTransactionGenerator:
     """
@@ -76,6 +80,18 @@ class RandomTransactionGenerator:
         transactions =  [ t for t in transactions if ((np.abs(t) < 1e-03) == False)] # Ensure no transaction is too small
         return transactions
     
+    def generateTransactionDirichlet(self, alpha, sumValue = 2000, sizealpha=10):
+        """
+        Generate a random transaction with Dirichlet distribution.
+        """
+        alphavec = [alpha] * sizealpha
+        transactionValue = self.rng.dirichlet(alphavec) * sumValue
+        # Ensure the transaction value is within the allowed range
+        if sum(transactionValue) > self.maxAbsTransactionValue:
+            raise ValueError("Transaction value exceeds maximum allowed value.")
+        return transactionValue
+    
+   
     
     def generateMostTransactionsGaussianButWithUniformOutliers(self, n, stdDev, mean, outlierFraction=0.1):
         """
