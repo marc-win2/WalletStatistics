@@ -64,8 +64,8 @@ def plotTransactionData(transactions, payments, deposits, plottingIndex=0):
         for t in transactions:
             f.write(f"{t}\n")
 
-def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, mode="canonical"):
-    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=False, adjustBetaAfterEachTransaction=True, mode=mode)
+def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDepMode=False, adjustBeta=True, mode="canonical"):
+    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDepMode, adjustBetaAfterEachTransaction=adjustBeta, mode=mode)
     simulation.coinSelectionDistr.setCanonical()
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -76,7 +76,7 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, mo
     print(simulation.highThroughputWallet)
     print("Total value in wallet:", simulation.highThroughputWallet.getTotalValue())
 
-    ########### For testing purposes, uncomment the following lines to process more transactions
+    ########### For testing purposes, uncomment the following lines to manually process more transactions
     #simulation.handleNextTransaction()  # Process the second transaction
     #print("After processing second transaction:")
     #print(simulation.highThroughputWallet)
@@ -92,6 +92,7 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, mo
     print(simulation.highThroughputWallet)
     print(simulation.highThroughputWallet.getTotalValue())
     print(simulation.highThroughputWallet.getTokenCount())
+    #print(simulation.tokenCountInvolvedInTransaction)
     print(np.mean(simulation.tokenCountInvolvedInTransaction))
     maxval = max(token.value for token in simulation.highThroughputWallet.tokens)
     print("Maximal token value in wallet:", maxval  )
@@ -244,7 +245,8 @@ if __name__ == "__main__":
     paymentTokenCountStddev = []
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, mode="canonical")
+        #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=100000, xFactor=10) # noPayments = xFactor * noDeposits
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDepMode=False, adjustBeta=False, mode="uniform")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []

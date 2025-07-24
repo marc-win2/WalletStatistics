@@ -14,7 +14,11 @@ class SimulationHandler:
         self.transactionSet = [1e07] # Initialize with a single transaction       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
-
+        self.distMode = mode # "canonical", "grandcanonical", "uniform"
+        if self.distMode == "uniform":
+            self.adjustBetaAfterEachTransaction = False # uniform mode does not use beta, so we do not adjust it after each transaction
+        if self.distMode not in ["canonical", "grandcanonical", "uniform"]:
+            raise ValueError("Invalid mode. Choose from 'canonical', 'grandcanonical', or 'uniform'.")
 
         self.currentTransactionIndex = 0
         self.transactionSetSize = len(self.transactionSet)
@@ -81,6 +85,10 @@ class SimulationHandler:
         self.__globalTokenIndex += 1
 
     def adjustBetaMicrocanonically(self):
+        if self.depositMode == "uniform":
+            self.coinSelectionDistr.setBeta(0.0)
+            self.coinSelectionDistr.setMode("uniform")
+            return
         totalValue = self.highThroughputWallet.getTotalValue()
         if totalValue == 0.0:
             totalValue = 1.0  # Avoid division by zero
@@ -88,7 +96,7 @@ class SimulationHandler:
         if tokenCount == 0:
             tokenCount = 1
         self.coinSelectionDistr.setBeta(tokenCount / totalValue)  # Adjust beta based on the number of tokens and total value in the wallet
-
+        
 
     def initiateWallet(self):
         """
@@ -233,17 +241,19 @@ class SimulationHandler:
         
         currentTransactionValue = self.transactionSet[self.currentTransactionIndex]
         
+        trueTransaction = True
         if np.abs(currentTransactionValue) < 1e-06:
-            self.currentTransactionIndex += 1    
-            return# Skip if the transaction value is effectively zero
+            self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = 0
+            trueTransaction = False
+            # Skip if the transaction value is effectively zero
 
         newTokens = None
-        if currentTransactionValue < 0.0: ### payment
+        if currentTransactionValue < 0.0 and trueTransaction: ### payment
             removedTokens = self.handlePayment(paymentValue=currentTransactionValue)
             self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = removedTokens.getTokenCount()
             self.totalValueHistory[self.currentTransactionIndex] = removedTokens.getTotalValue()
 
-        if currentTransactionValue > 0.0: ## deposit
+        if currentTransactionValue > 0.0 and trueTransaction: ## deposit
             newTokens = self.handleDeposit(depositValue=currentTransactionValue)
             self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = newTokens.getTokenCount()
         
