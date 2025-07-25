@@ -11,7 +11,7 @@ class SimulationHandler:
     """
     def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, mode="canonical"):
         ### for transaction handling
-        self.transactionSet = [1e07] # Initialize with a single transaction       
+        self.transactionSet = [1e05] # Initialize with a single transaction       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
         self.distMode = mode # "canonical", "grandcanonical", "uniform"
@@ -26,7 +26,7 @@ class SimulationHandler:
         self.totalValueHistory = [None] * self.transactionSetSize # used to store the total value of the wallet after each transaction
         self.tokenCountHistory = [None] * self.transactionSetSize # used to store the number of tokens in the wallet after each transaction
         self.saveBetaHistory = [None] * self.transactionSetSize# used to store the beta value after each transaction
-
+        self.emergenceRefundTransactionIndices = [] # used to store the indices of transactions where the emergence refund was triggered
 
         self.__globalTokenIndex = 0 # used to assign unique serial numbers to tokens!!!! Pay attention when changing this 
 
@@ -87,15 +87,16 @@ class SimulationHandler:
     def adjustBetaMicrocanonically(self):
         if self.depositMode == "uniform":
             self.coinSelectionDistr.setBeta(0.0)
-            self.coinSelectionDistr.setMode("uniform")
-            return
-        totalValue = self.highThroughputWallet.getTotalValue()
-        if totalValue == 0.0:
-            totalValue = 1.0  # Avoid division by zero
-        tokenCount = self.highThroughputWallet.getTokenCount()
-        if tokenCount == 0:
-            tokenCount = 1
-        self.coinSelectionDistr.setBeta(tokenCount / totalValue)  # Adjust beta based on the number of tokens and total value in the wallet
+            if self.coinSelectionDistr.mode != "uniform":
+                self.coinSelectionDistr.setMode("uniform")
+        else:
+            totalValue = self.highThroughputWallet.getTotalValue()
+            if totalValue == 0.0:
+                totalValue = 1.0  # Avoid division by zero
+            tokenCount = self.highThroughputWallet.getTokenCount()
+            if tokenCount == 0:
+                tokenCount = 1
+            self.coinSelectionDistr.setBeta(tokenCount / totalValue)  # Adjust beta based on the number of tokens and total value in the wallet
         
 
     def initiateWallet(self):
@@ -261,14 +262,13 @@ class SimulationHandler:
             self.adjustBetaMicrocanonically()
         
         self.doWalletStateTracking()  # Track the number of tokens in the wallet after each transaction and the total value of the wallet
-        self.trackMaximalTokenValue = max([t.value for t in self.highThroughputWallet.tokens])
-        if self.highThroughputWallet.getTokenCount() < 2 and self.currentTransactionIndex > 15: ## adjust this to whatever special behavior you want to be warned about
-            if self.timeCounter > 5000:
-                print("Warning: Maximal token value in wallet is less than 10^4, this might lead to unexpected behavior.")
-                print("Maximal token value in wallet is", self.trackMaximalTokenValue)
-                print("Current transaction index is", self.currentTransactionIndex)
-                print("Current wallet tokens are", self.highThroughputWallet.tokens)
-            self.timeCounter += 1
+        # if self.highThroughputWallet.getTokenCount() < 2 and self.currentTransactionIndex > 15: ## adjust this to whatever special behavior you want to be warned about
+        #     if self.timeCounter > 5000:
+        #         print("Warning: Maximal token value in wallet is less than 10^4, this might lead to unexpected behavior.")
+        #         print("Maximal token value in wallet is", self.trackMaximalTokenValue)
+        #         print("Current transaction index is", self.currentTransactionIndex)
+        #         print("Current wallet tokens are", self.highThroughputWallet.tokens)
+        #     self.timeCounter += 1
 
         self.currentTransactionIndex += 1
 
@@ -297,4 +297,19 @@ class SimulationHandler:
         self.saveBetaHistory[self.currentTransactionIndex] = self.coinSelectionDistr.beta
         self.tokenCountHistory[self.currentTransactionIndex] = self.highThroughputWallet.getTokenCount()
         self.totalValueHistory[self.currentTransactionIndex] = self.highThroughputWallet.getTotalValue()
-        self.trackMaximalTokenValue = max([t.value for t in self.highThroughputWallet.tokens])
+        if self.totalValueHistory[self.currentTransactionIndex] < 1e04:
+            print("Warning: Total wallet value is low.")
+            self.emergenceRefund()  # Handle the emergence refund process if the total value is too low
+
+
+        #self.trackMaximalTokenValue = max([t.value for t in self.highThroughputWallet.tokens])
+
+
+    def emergenceRefund(self):
+        """
+        Handle the emergence refund process.
+        """
+        refundToken = Token(1e05, serialno=self.__globalTokenIndex)
+        self.addTokenToOwnWallet(refundToken)
+        print("Emergence refund triggered. Adding token with value", refundToken.value, "to the wallet. Current transaction index is", self.currentTransactionIndex)
+        self.emergenceRefundTransactionIndices.append(self.currentTransactionIndex)

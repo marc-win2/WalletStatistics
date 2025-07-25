@@ -64,8 +64,8 @@ def plotTransactionData(transactions, payments, deposits, plottingIndex=0):
         for t in transactions:
             f.write(f"{t}\n")
 
-def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDepMode=False, adjustBeta=True, mode="canonical"):
-    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDepMode, adjustBetaAfterEachTransaction=adjustBeta, mode=mode)
+def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, mode="canonical"):
+    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, mode=mode)
     simulation.coinSelectionDistr.setCanonical()
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -139,6 +139,12 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, dr
     plt.ylabel('Beta Value')
     plt.savefig('Data/BetaPerTransaction_' + str(simulationIndex) + '.png')
     plt.clf()  # Clear the current figure
+
+    with open('Data/emergence_refund_indices_' + str(simulationIndex) + '.dat', 'w') as f:
+        for idx in simulation.emergenceRefundTransactionIndices:
+            f.write(f"{idx}\n")
+
+
 
 
     return vals, maxval, simulation.highThroughputWallet.getTotalValue(), simulation.highThroughputWallet.getTokenCount(), simulation.tokenCountInvolvedInTransaction, simulation.tokenCountHistory, simulation.totalValueHistory
@@ -246,7 +252,7 @@ if __name__ == "__main__":
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
         #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=100000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDepMode=False, adjustBeta=False, mode="uniform")
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=False, mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []
@@ -274,18 +280,32 @@ if __name__ == "__main__":
         plt.savefig('Data/payment_token_count_' + str(i) + '.png')
         plt.clf()  # Clear the current figure
 
-        for t in transactions:
-            totalTransaction.append(t)
+        with open('Data/total_transactions.dat', 'a') as f:
+            for t in transactions:
+                f.write(f"{t}\n")
+                #totalTransaction.append(t)
 
-        for v in tokenVals:
-            alltokenValues.append(v)
-        
+        with open('Data/total_token_values_.dat', 'a') as f:
+            for v in tokenVals:
+                f.write(f"{v}\n")
+                #alltokenValues.append(v)
+
         totalValues.append(totalValue)
         totalTokenCounts.append(totalTokensInWallet)
         totalMaxTokenVals.append(maxTokenValRemoved)
         paymentTokenCountMeans.append(mean)
         paymentTokenCountStddev.append(std)
     
+    tokenVals = 0 
+    maxTokenValRemoved
+    totalValue = 0
+    totalTokensInWallet = 0
+    tokenCountPerT = 0
+    tokenCountHistory = 0
+    totalValueHistory = 0
+
+    totalTransaction = np.loadtxt('Data/total_transactions.dat')
+    alltokenValues = np.loadtxt('Data/total_token_values_.dat')
     plt.hist(totalTransaction, bins=200, density=False)
     plt.title("Histogram of Transactions over all Simulations")
     plt.xlabel("Transaction Value")

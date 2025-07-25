@@ -74,7 +74,7 @@ class CoinSelectionDistribution:
         probabilities = [] # list of all p(t.value) = exp(-beta *t.value) for all token in tokenSet (i.e., only those with value > 0.0 and <= transactionValue)
         intBoundsForUniformDrawing = []
 
-        for i, token in enumerate(tokenSet):
+        for token in tokenSet:
             val = token.value
             prob = self.compProbability(val) 
             probabilities.append(prob)
