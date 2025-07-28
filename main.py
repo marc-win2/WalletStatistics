@@ -252,7 +252,7 @@ if __name__ == "__main__":
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
         #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=100000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=False, mode="canonical")
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []
