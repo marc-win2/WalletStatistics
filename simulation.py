@@ -9,16 +9,19 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, mode="canonical"):
+    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical"):
         ### for transaction handling
-        self.transactionSet = [1e05] # Initialize with a single transaction       
+        self.transactionSet = [2e03] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
         self.distMode = mode # "canonical", "grandcanonical", "uniform"
+        self.doEmergenceRefund = doEmergRefund # If True, the emergence refund is triggered if the total value of the wallet is below a certain threshold
         if self.distMode == "uniform":
             self.adjustBetaAfterEachTransaction = False # uniform mode does not use beta, so we do not adjust it after each transaction
         if self.distMode not in ["canonical", "grandcanonical", "uniform"]:
             raise ValueError("Invalid mode. Choose from 'canonical', 'grandcanonical', or 'uniform'.")
+        
+        self.eps = 1e-05   # lower absolute value threshold to ignore small values in the simulation
 
         self.currentTransactionIndex = 0
         self.transactionSetSize = len(self.transactionSet)
@@ -108,7 +111,7 @@ class SimulationHandler:
         
         currentTransactionValue = self.transactionSet[self.currentTransactionIndex]
         
-        if currentTransactionValue <= 0.0:
+        if currentTransactionValue < -self.eps:
             print("Warning: current transaction value is zero or negative, no tokens can be selected for initialization.")
             raise ValueError("Cannot initialize wallet with zero or negative transaction value.")
 
@@ -143,7 +146,7 @@ class SimulationHandler:
             print("Deposit value must be positive.")
             return Wallet()
         
-        if np.abs(depositValue) < 1e-06:
+        if np.abs(depositValue) < self.eps:
             print("Deposit value is effectively zero, no tokens will be added.")
             return Wallet()
         
@@ -193,7 +196,7 @@ class SimulationHandler:
         remainingPaymentValue = -paymentValue
         selectedWallet = Wallet()
         
-        while remainingPaymentValue > 0.0:
+        while remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > 1e-06:
             if self.highThroughputWallet.isEmpty():
                 print("Wallet is empty, cannot proceed with payment.")
                 print("Overall payment value was", -paymentValue)
@@ -222,9 +225,9 @@ class SimulationHandler:
             if self.adjustBetaAfterEachTransaction:
                 self.adjustBetaMicrocanonically()
 
-        if remainingPaymentValue > 0.0:
+        if remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > self.eps:
             print(f"Warning: Remaining payment value {remainingPaymentValue} could not be covered by available tokens.")
-        if remainingPaymentValue < 0.0:
+        if remainingPaymentValue < 0.0 and np.abs(remainingPaymentValue) > self.eps:
             token = Token(-remainingPaymentValue, serialno=self.__globalTokenIndex)
             self.addTokenToOwnWallet(token)  # Add the remaining value as a new token
             selectedWallet.addToken(token)
@@ -243,7 +246,7 @@ class SimulationHandler:
         currentTransactionValue = self.transactionSet[self.currentTransactionIndex]
         
         trueTransaction = True
-        if np.abs(currentTransactionValue) < 1e-06:
+        if np.abs(currentTransactionValue) < self.eps:
             self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = 0
             trueTransaction = False
             # Skip if the transaction value is effectively zero
@@ -297,7 +300,7 @@ class SimulationHandler:
         self.saveBetaHistory[self.currentTransactionIndex] = self.coinSelectionDistr.beta
         self.tokenCountHistory[self.currentTransactionIndex] = self.highThroughputWallet.getTokenCount()
         self.totalValueHistory[self.currentTransactionIndex] = self.highThroughputWallet.getTotalValue()
-        if self.totalValueHistory[self.currentTransactionIndex] < 1e04:
+        if self.totalValueHistory[self.currentTransactionIndex] < 0.1*self.transactionSet[0] and self.doEmergenceRefund:
             print("Warning: Total wallet value is low.")
             self.emergenceRefund()  # Handle the emergence refund process if the total value is too low
 
@@ -309,7 +312,11 @@ class SimulationHandler:
         """
         Handle the emergence refund process.
         """
-        refundToken = Token(1e05, serialno=self.__globalTokenIndex)
+        if not self.doEmergenceRefund:
+            print("Emergence refund is not enabled, skipping.")
+            return
+
+        refundToken = Token(self.transactionSet[0], serialno=self.__globalTokenIndex)
         self.addTokenToOwnWallet(refundToken)
         print("Emergence refund triggered. Adding token with value", refundToken.value, "to the wallet. Current transaction index is", self.currentTransactionIndex)
         self.emergenceRefundTransactionIndices.append(self.currentTransactionIndex)

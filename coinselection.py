@@ -21,24 +21,15 @@ class CoinSelectionDistribution:
     def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
-        self.betaMuArray = []
-        self.expn = []
+  
         self.mode = distMode # can be "grandcanonical" or "canonical", or "uniform"
         self.warnaboutZeroProbabilities = False  # Flag to warn about zero probabilities
 
         self.rng = initializeRandomNumGenerator()
 
-        
-        if beta == 0.0:
-            print("Warning: beta is zero, corresponds to uniform distribution. Set to mode uniform.")
-            self.beta = 0.0
-            self.mode = "uniform"
-            self.betaMuArray = [0.0] * len(self.tBucketBounds)
-            self.expn = []
-        else:
-            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
+
         if self.mode == "grandcanonical":
-            self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted
+            self.setGrandCanonical()
         if self.mode == "canonical":
             self.setCanonical()
         if self.mode == "uniform":
@@ -171,13 +162,31 @@ class CoinSelectionDistribution:
         beta = 1.0 / (0.1 * value)  # Adjust beta such that the mean is equal to 0.1 * value
         return self.pickValueFromContinuousDistributionWithVariableBeta(beta)
     
+    def setGrandCanonical(self, muValueGlobal=0.0):
+        """
+        Set the mode to grandcanonical.
+        """
+        self.mode = "grandcanonical"
+        
+        # Initialize betaMuArray based on the tBucketBounds
+        self.muArray = [muValueGlobal for i in range(len(self.tBucketBounds))]
+    
+        
+        # Set a default value for beta if not already set
+        if self.beta == 0.0:
+            print("Warning: beta is zero, grandcanonical mode, setting to 1.0.")
+            self.beta = 1.0
+    
     def setCanonical(self):
         """
         Set the mode to canonical.
         """
         self.mode = "canonical"
-        self.betaMuArray = [0.0] * len(self.tBucketBounds)
-        self.expn = [] 
+        if self.beta == 0.0:
+            print("Warning: beta is zero, corresponds to uniform distribution. Set to mode uniform.")
+            self.beta = 0.0
+            self.mode = "uniform"
+
 
     def setUniform(self):
         """
@@ -193,20 +202,12 @@ class CoinSelectionDistribution:
         Set the inverse temperature (beta).
         """
         self.beta = beta
-        if self.mode == "grandcanonical":    
-            self.fixExpTokenNoGlobally(10.0)  # Example value, can be adjusted
+        #if self.mode == "grandcanonical":    
     
-    def fixExpTokenNoGlobally(self, tokenNoFixed):
-        """
-        Set a fixed number of tokens globally.
-        """
-        if self.mode != "grandcanonical":
-            self.expn = []
-            self.betaMuArray = [0.0] * len(self.tBucketBounds)
 
-        else:
-            self.expn = [tokenNoFixed] * len(self.tBucketBounds)
-            self.betaMuArray = [np.log(expn) + t for expn, t in zip(self.expn, self.tBucketBounds)]
+
+
+   
 
 
     def probabilityGrandCanonical(self, tokenValue):
@@ -215,12 +216,12 @@ class CoinSelectionDistribution:
         """
         if tokenValue < 0.0 or tokenValue >= self.tBucketBounds[-1]:
             return 0.0
-        
-        bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='right') 
-        if bucketIndex < 0 or bucketIndex >= len(self.betaMuArray):
+
+        bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='right')
+        if bucketIndex < 0 or bucketIndex >= len(self.muArray):
             return 0.0
-        
-        mu = self.betaMuArray[bucketIndex] / self.beta
+
+        mu = self.muArray[bucketIndex] 
         energy = tokenValue
         return BoltzmannDistribution(energy, self.beta, mu)
     

@@ -6,17 +6,15 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    numSimulations = 100
+    numSimulations = 10000
 
-    addPrefix = "Dirichtlet_canonicaladjustbeta_run1"
+    addPrefix = "."# "./Simulations/Gaussian_Boltzmannadjustbeta_normalrefund" #"Dirichlet_BoltzmannBetaadjusted_noinitialfunding1"#"Dirichtlet_canonicaladjustbeta_run1"
     dataPath = addPrefix + "/Data/"
     savePath = addPrefix + "/DataGlobal/"
 
     transActionNumber = np.loadtxt(dataPath + "transaction0.dat")
     noTransactions = len(transActionNumber)
     print("Number of transactions in the simulation: ", noTransactions)
-
-   
 
     avgTotalValues = []
     stdDevTotalValues = []
@@ -27,7 +25,7 @@ if __name__ == "__main__":
 
     allTokenValues = []
 
-    stepSize = 10000
+    stepSize = 1000
     # Initialize arrays to hold the data for each simulation    
     for transIndex in np.arange(0,noTransactions, stepSize):
         print("Processing transaction index: ", transIndex)
@@ -70,7 +68,7 @@ if __name__ == "__main__":
     tv_ = 0
     tT_ = 0
 
-    noPayments = 100000
+    noPayments = 1000
     print(noPayments, " payments in the simulation")
 
     avgPaymentTokenCounts = []
@@ -101,8 +99,19 @@ if __name__ == "__main__":
         # Load the token values for each simulation
         tokenValues = np.genfromtxt(dataPath + "token_values_" + str(simIndex) + ".dat", dtype=float)
         
+        tokenValues = tokenValues.tolist()
+        #print(tokenValues)
+        
+        # Check if the tokenValues is
         # Append the token values to the allTokenValues list
-        allTokenValues.extend(tokenValues)
+        # check if tokenValues is a list or a single value
+        if isinstance(tokenValues, list):
+            for t in tokenValues:
+                allTokenValues.append(t)
+        else:
+            allTokenValues.append(tokenValues)
+    maxTokens = np.genfromtxt(savePath + "total_max_token_vals.dat", dtype=float)
+    allTokenValues.extend(maxTokens.tolist())
 
     np.savetxt(savePath + "all_token_values.dat", allTokenValues)
     # histrogram of all token values crosscheck
@@ -113,7 +122,11 @@ if __name__ == "__main__":
     plt.savefig(savePath + "histogram_all_token_values_crosscheck.png")
     plt.clf()  # Clear the current figure for the next plot
 
-
+    zoomedTokenValues = [val for val in allTokenValues if val < 5000]
+    plt.hist(zoomedTokenValues, bins=200, density=False, alpha=0.7, label='All Token Values')
+    plt.xlabel('Token Value')
+    plt.savefig(savePath + "histogram_token_values_crosscheck_zoomed.png")
+    plt.clf()  # Clear the current figure for the next plot
 
     np.savetxt(savePath + "avg_total_values.dat", avgTotalValues)
     np.savetxt(savePath + "std_dev_total_values.dat", stdDevTotalValues)

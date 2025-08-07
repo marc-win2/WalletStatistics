@@ -64,8 +64,8 @@ def plotTransactionData(transactions, payments, deposits, plottingIndex=0):
         for t in transactions:
             f.write(f"{t}\n")
 
-def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, mode="canonical"):
-    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, mode=mode)
+def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, doEmergRefund=True, mode="canonical"):
+    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, doEmergRefund=doEmergRefund, mode=mode)
     simulation.coinSelectionDistr.setCanonical()
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -101,7 +101,7 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, dr
 
     vals.remove(maxval) 
     plt.hist(vals, bins=200,density=False)
-    plt.title("Histogram of Token Values in Wallet after Simulation")
+    plt.title("Token values in Wallet after a single run")
     plt.xlabel("Token Value")
     plt.savefig('Data/token_values_histogram_' + str(simulationIndex) + '.png')
     with open('Data/token_values_' + str(simulationIndex) + '.dat', 'w') as f:
@@ -112,9 +112,9 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, dr
     with open('Data/WalletValue_' + str(simulationIndex) + '.dat', 'w') as f:
         for t, v in zip(transaction_, simulation.totalValueHistory):
             f.write(f"{t} {v}\n")
-    plt.scatter(transaction_, simulation.totalValueHistory, marker='o', color='black')
-    plt.title('Total Value in Wallet per Transaction')
-    plt.xlabel('Transaction Number')
+    plt.scatter(transaction_, simulation.totalValueHistory, marker='o', color='blue', linewidths=0.05)
+    #plt.title('Total Value in Wallet per Transaction')
+    plt.xlabel('Transaction Index')
     plt.ylabel('Total Value in Wallet')
     plt.savefig('Data/WalletValue_' + str(simulationIndex) + '.png')
     plt.clf()  # Clear the current figure
@@ -122,20 +122,23 @@ def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, dr
     with open('Data/TokenCount_' + str(simulationIndex) + '.dat', 'w') as f:
         for t, v in zip(transaction_, simulation.tokenCountHistory):
             f.write(f"{t} {v}\n")
-    plt.scatter(transaction_, simulation.tokenCountHistory, marker='o', color='black')
-    plt.title('Token Count in Wallet per Transaction')
-    plt.xlabel('Transaction Number')
-    plt.ylabel('Token Count in Wallet')
+    plt.scatter(transaction_, simulation.tokenCountHistory, marker='x', color='blue', linewidths=0.05)
+    #plt.title('UTXO pool size')
+    plt.xlabel('Transaction Index')
+    plt.ylabel('UTXO Pool Size')
     plt.savefig('Data/TokenCount_' + str(simulationIndex) + '.png')
     plt.clf()  # Clear the current figure
 
     with open('Data/BetaPerTransaction_' + str(simulationIndex) + '.dat', 'w') as f:
         for t, b in zip(transaction_, simulation.saveBetaHistory):
             f.write(f"{t} {b}\n")
-    plt.scatter(transaction_, simulation.saveBetaHistory, marker='o', color='black')
-    plt.yscale('log')
+    plt.scatter(transaction_, simulation.saveBetaHistory, marker='o', color='black', linewidths=0.05)
+    if np.any(simulation.saveBetaHistory) < 1e-10:
+        plt.yscale('linear')
+    else:
+        plt.yscale('log')
     plt.title('Beta Value per Transaction')
-    plt.xlabel('Transaction Number')
+    plt.xlabel('Transaction Index')
     plt.ylabel('Beta Value')
     plt.savefig('Data/BetaPerTransaction_' + str(simulationIndex) + '.png')
     plt.clf()  # Clear the current figure
@@ -190,14 +193,17 @@ def generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=0,noPayments=100
     
     return transactions, deposits, payments
 
-def generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex = 0, noDeposits = 100000, xFactor=10):
+def generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex = 0, noDeposits = 100000, xFactor=10, generateDirichletAsFloats=True):
 
     print("Generating Dirichlet Payments and constant deposits")
     deposits = [2000] * noDeposits
     payments = []
     transactionGenerator = RandomTransactionGenerator()
     for i in range(noDeposits):
-        generateXPayments = transactionGenerator.generateTransactionDirichlet(0.5, sumValue=2000, sizealpha=xFactor)
+        if generateDirichletAsFloats:
+            generateXPayments = transactionGenerator.generateTransactionDirichlet(1.0,sumValue=2000, sizealpha=xFactor)
+        else:
+            generateXPayments = transactionGenerator.generateIntegerDirichletPaymentsViaMultinomial(n=xFactor, sum=2000)
         for k in range(xFactor):
             payments.append(-1.0*generateXPayments[k])
     print("deposits= " , np.mean(deposits), "+-" ,np.std(deposits))
@@ -239,9 +245,34 @@ if __name__ == "__main__":
 
     if os.path.isdir('Data') is False:
         os.mkdir('Data')
+    else:
+        print("Data directory already exists, overwriting data files.")
+        try:
+            input("Press anything to continue or Ctrl+C to cancel...")
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user.")
+            exit(0)
+
     if os.path.isdir('DataGlobal') is False:
         os.mkdir('DataGlobal')
-    numSimulations = 100
+    else:
+        print("DataGlobal directory already exists, overwriting data files.")
+        try:
+            input("Press anything to continue or Ctrl+C to cancel...")
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user.")
+            exit(0)
+
+    # r = RandomTransactionGenerator()
+    # safeInts = r.generateIntegerDirichletPaymentsViaMultinomial(n=10, sum=2000)
+    # print("Generated Dirichlet payments via multinomial distribution:", safeInts)
+    # print("Exp. value of Dirichlet payments:", np.mean(safeInts), "+-", np.std(safeInts))
+    # safeFloats = r.generateTransactionDirichlet(alpha=1.0, sumValue=2000, sizealpha=10)  
+    # print("Generated Dirichlet payments via Dirichlet distribution:", safeFloats)
+    # print("Exp. value of Dirichlet payments:", np.mean(safeFloats), "+-", np.std(safeFloats))
+
+
+    numSimulations = 10000
     alltokenValues = []
     totalTransaction = []
     totalValues = []
@@ -250,9 +281,9 @@ if __name__ == "__main__":
     paymentTokenCountMeans = []
     paymentTokenCountStddev = []
     for i in range(numSimulations):
-        transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
-        #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=100000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, mode="canonical")
+        #transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
+        transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=1000, xFactor=10) # noPayments = xFactor * noDeposits
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, doEmergRefund=False,  mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []
@@ -273,7 +304,7 @@ if __name__ == "__main__":
                 f.write(f"{tokenCount}\n")
                 paymentno.append(k)
 
-        plt.scatter(paymentno, paymentTokenCount, marker='o', color='black')
+        plt.scatter(paymentno, paymentTokenCount, marker='o', color='black', linewidths=0.05)
         plt.title('Payment Token Count')
         plt.xlabel('Payment Number')
         plt.ylabel('Number of Tokens in Payment')
@@ -314,7 +345,7 @@ if __name__ == "__main__":
     plt.clf()  # Clear the current figure
 
     plt.hist(alltokenValues, bins=200, density=False)
-    plt.title("Histogram of Token Values over all Simulations")
+    plt.title("Token Values from all Simulations, Max Token removed")
     plt.xlabel("Token Value")
     plt.ylabel("Frequency")
     plt.savefig("DataGlobal/histogram_token_values.png")
@@ -325,10 +356,10 @@ if __name__ == "__main__":
     with open('DataGlobal/total_values.dat', 'w') as f:
         for v in totalValues:
             f.write(f"{v}\n")
-    plt.scatter(simNoList, totalValues, marker='o', color='black')
-    plt.title('Total Value in Wallet per Simulation')
-    plt.xlabel('Simulation Number')
-    plt.ylabel('Total Value in Wallet')
+    plt.scatter(simNoList, totalValues, marker='o', color='blue', linewidths=0.05)
+    plt.title('Final state: Total Value in Wallet')
+    plt.xlabel('Simulation Index')
+    #plt.ylabel('Total Value in Wallet')
     plt.savefig('DataGlobal/total_values.png')
     plt.clf()  # Clear the current figure
 
@@ -336,9 +367,9 @@ if __name__ == "__main__":
         for c in totalTokenCounts:
             f.write(f"{c}\n")
     plt.scatter(simNoList, totalTokenCounts, marker='o', color='black')
-    plt.title('Total Token Count in Wallet per Simulation')
-    plt.xlabel('Simulation Number')
-    plt.ylabel('Total Token Count in Wallet')
+    plt.title('Final State UTXO Pool Size')
+    plt.xlabel('Simulation Index')
+    #plt.ylabel('Total Token Count in Wallet')
     plt.savefig('DataGlobal/total_token_counts.png')
     plt.clf()  # Clear the current figure
 
