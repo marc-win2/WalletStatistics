@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    numSimulations = 10000
+    numSimulations = 10
 
     addPrefix = "."# "./Simulations/Gaussian_Boltzmannadjustbeta_normalrefund" #"Dirichlet_BoltzmannBetaadjusted_noinitialfunding1"#"Dirichtlet_canonicaladjustbeta_run1"
     dataPath = addPrefix + "/Data/"
@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     allTokenValues = []
 
-    stepSize = 1000
+    stepSize = 20000
     # Initialize arrays to hold the data for each simulation    
     for transIndex in np.arange(0,noTransactions, stepSize):
         print("Processing transaction index: ", transIndex)
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     tv_ = 0
     tT_ = 0
 
-    noPayments = 1000
+    noPayments = 100000
     print(noPayments, " payments in the simulation")
 
     avgPaymentTokenCounts = []

@@ -1,6 +1,8 @@
 # Created by Marc Winstel on July 14, 2025
 import numpy as np
 from math import floor
+
+from sympy import det
 from transaction import initializeRandomNumGenerator, generateUniformFloats, generateGaussianFloats
 
 
@@ -18,18 +20,20 @@ class CoinSelectionDistribution:
     """
     Class to handle coin selection distribution calculations.
     """
-    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
+    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical", muGlobal=0.0):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
   
         self.mode = distMode # can be "grandcanonical" or "canonical", or "uniform"
         self.warnaboutZeroProbabilities = False  # Flag to warn about zero probabilities
-
+        self.muArray = []
         self.rng = initializeRandomNumGenerator()
 
 
+        
         if self.mode == "grandcanonical":
-            self.setGrandCanonical()
+            self.setGrandCanonical(muGlobal)
+
         if self.mode == "canonical":
             self.setCanonical()
         if self.mode == "uniform":
@@ -176,16 +180,38 @@ class CoinSelectionDistribution:
         if self.beta == 0.0:
             print("Warning: beta is zero, grandcanonical mode, setting to 1.0.")
             self.beta = 1.0
+
+    def setGrandCanonical(self, muValueArray = None):
+        """
+        Set the mode to grandcanonical with a specific chemical potential array.
+        """
+        self.mode = "grandcanonical"
+        if muValueArray is not None:
+            self.muArray = muValueArray
+        else:
+            self.muArray = [0.0 for i in range(len(self.tBucketBounds))]
+
+        if self.beta == 0.0:
+            print("Warning: beta is zero, grandcanonical mode, setting to 1.0.")
+            self.beta = 1.0
     
+    def setMuArray(self, muValueArray):
+        """
+        Set the chemical potential array for grandcanonical mode.
+        """
+        if self.mode != "grandcanonical":
+            raise ValueError("Cannot set muArray in non-grandcanonical mode.")
+        self.muArray = muValueArray
+
     def setCanonical(self):
         """
         Set the mode to canonical.
         """
         self.mode = "canonical"
+        self.muArray = [0.0] * len(self.tBucketBounds)  # Reset muArray for canonical mode
         if self.beta == 0.0:
             print("Warning: beta is zero, corresponds to uniform distribution. Set to mode uniform.")
-            self.beta = 0.0
-            self.mode = "uniform"
+            self.setUniform()
 
 
     def setUniform(self):
@@ -193,9 +219,8 @@ class CoinSelectionDistribution:
         Set the mode to uniform.
         """
         self.mode = "uniform"
-        self.betaMuArray = [0.0] * len(self.tBucketBounds)
-        self.expn = []
         self.beta = 0.0
+        self.muArray = None  # Reset muArray for uniform mode
         
     def setBeta(self, beta):
         """

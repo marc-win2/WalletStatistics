@@ -9,9 +9,9 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical"):
+    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical", muGlobal=None):
         ### for transaction handling
-        self.transactionSet = [2e03] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
+        self.transactionSet = [1e05] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
         self.distMode = mode # "canonical", "grandcanonical", "uniform"
@@ -39,9 +39,9 @@ class SimulationHandler:
         if drawDepositToken:
             self.depositMode = "drawtokenFlexibleBeta"
         
-    
+        self.tokenBuckets = tokenDenominationBuckets # This is a list of token denomination buckets, e.g. [1, 1e01, 1e02] or [2e-01, 2e00, 2e01, 2e02] 
         self.highThroughputWallet = Wallet()
-        self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode) # Initialize the coin selection distribution with the given beta and token denomination buckets
+        self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode, muGlobal=muGlobal) # Initialize the coin selection distribution with the given beta and token denomination buckets
         
         
         self.initiateWallet()  # Initialize the wallet with a set of tokens
@@ -100,7 +100,33 @@ class SimulationHandler:
             if tokenCount == 0:
                 tokenCount = 1
             self.coinSelectionDistr.setBeta(tokenCount / totalValue)  # Adjust beta based on the number of tokens and total value in the wallet
+    
+    def adjustMuArrayBucketWise(self):
+        """
+        Adjust the mu array bucket-wise based on the current wallet state.
+        This is used in grandcanonical mode to adjust the chemical potential.
+        """
+        if self.coinSelectionDistr.mode != "grandcanonical":
+            print("Warning: CoinSelectionDistribution is not in grandcanonical mode, not meaningful to adjust mu array.")
+            return
         
+        totalValue = self.highThroughputWallet.getTotalValue()
+        if totalValue == 0.0:
+            totalValue = 1.0
+        tokenCount = self.highThroughputWallet.getTokenCount()
+        if tokenCount == 0:
+            tokenCount = 1
+        beta = self.coinSelectionDistr.beta
+        noBuckets = len(self.tokenBuckets)
+        desiredNoPerBucket = tokenCount / noBuckets
+        for i in range(noBuckets):
+            muValue = None
+            if i != 0:
+                muValue = (self.tokenBuckets[i-1] + self.tokenBuckets[i]) / 2.0 + np.log(desiredNoPerBucket) / beta
+            else:
+                muValue = self.tokenBuckets[i] / 2.0 + np.log(desiredNoPerBucket) / beta
+            
+            self.coinSelectionDistr.muArray[i] = muValue
 
     def initiateWallet(self):
         """
