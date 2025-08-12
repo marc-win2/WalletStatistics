@@ -92,8 +92,8 @@ class SimulationHandler:
             if token.value < bucket and (i== 0 or token.value >= self.tokenBuckets[i-1]):
                 self.tokenNoPerBucket[i] += 1
                 break
-        print("Added token with value", token.value, "and serial number", token.sno, "to the wallet. Current global token index is", self.__globalTokenIndex)
-        print("Curren tokenNoPerBucket is", self.tokenNoPerBucket)
+        #print("Added token with value", token.value, "and serial number", token.sno, "to the wallet. Current global token index is", self.__globalTokenIndex)
+        #print("Curren tokenNoPerBucket is", self.tokenNoPerBucket)
 
     def adjustBetaMicrocanonically(self):
         if self.depositMode == "uniform":
