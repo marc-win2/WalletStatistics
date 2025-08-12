@@ -64,8 +64,8 @@ def plotTransactionData(transactions, payments, deposits, plottingIndex=0):
         for t in transactions:
             f.write(f"{t}\n")
 
-def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, doEmergRefund=True, mode="canonical"):
-    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, doEmergRefund=doEmergRefund, mode=mode)
+def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, doEmergRefund=True, useBuckets=False, mode="canonical"):
+    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, doEmergRefund=doEmergRefund, useBucketsForProbabilityComp=useBuckets, mode=mode)
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
     simulation.prolongTransactionSet(transactions)
@@ -229,8 +229,10 @@ def generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex = 0, noDepo
 
 
 if __name__ == "__main__":
-    tokens =  [10**i for i in range(-2, 10)]
-    tokenDenominationBuckets = tokens# np.append([0], tokens)
+    tokens =  [10**(i) for i in range(-2, 10)]
+    tokenDenominationBuckets = tokens
+    print(tokenDenominationBuckets)
+    # np.append([0], tokens)
     #print("tokenDenominationBuckets = ", tokenDenominationBuckets)
     
     #plottingTransactionsTest()   
@@ -283,7 +285,7 @@ if __name__ == "__main__":
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
         #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=1000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=False, doEmergRefund=True,  mode="canonical")
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, doEmergRefund=True, useBuckets=True, mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []

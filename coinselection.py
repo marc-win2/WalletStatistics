@@ -23,14 +23,18 @@ class CoinSelectionDistribution:
     def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
-  
         self.mode = distMode # can be "grandcanonical" or "canonical", or "uniform"
         self.warnaboutZeroProbabilities = False  # Flag to warn about zero probabilities
         self.muArray = []
         self.rng = initializeRandomNumGenerator()
 
+        self.preComputedProbabilities = [0.0]* len(self.tBucketBounds)  # Precomputed probabilities for each bucket bound  
+        for i, bound in enumerate(self.tBucketBounds):
+            self.preComputedProbabilities[i] = self.compProbabilityForBucket(i) # precompute the probabilities for the bucket bounds, where the upper bound is used to compute the probability for the bucket
 
-        
+        print(self.preComputedProbabilities)
+
+
         if self.mode == "grandcanonical":
             self.setGrandCanonical()
 
@@ -38,6 +42,30 @@ class CoinSelectionDistribution:
             self.setCanonical()
         if self.mode == "uniform":
             self.setUniform()
+        
+    def returnBucketProbabilitiesForFixedWalletState(self, tokenNoPerBucket):
+        """
+        Pick a bucket based on the precomputed probabilities. Set Probabilities to zero for empty buckets.
+        """
+        probabilities = self.preComputedProbabilities.copy()
+        for i, bucket in enumerate(self.tBucketBounds):
+            if tokenNoPerBucket[i] == 0: ## return zero probability for empty buckets
+                probabilities[i] = 0.0
+
+
+
+        intBoundsForDrawing = []
+        summing = 0.0
+        for i, prob in enumerate(probabilities):
+            summing += probabilities[i]
+            intBoundsForDrawing.append(summing)
+
+        return probabilities, intBoundsForDrawing
+
+
+
+                
+        
 
 
     def compDenominatorDiscDistribution(self, tokenSet):
@@ -230,6 +258,24 @@ class CoinSelectionDistribution:
         #if self.mode == "grandcanonical":    
     
 
+    def compProbabilityForBucket(self, bucketIndex):
+        """
+        Compute the probability for a given bucket index.
+        """
+        if bucketIndex < 0 or bucketIndex >= len(self.tBucketBounds):
+            raise IndexError("Bucket index out of bounds.")
+        
+        if self.mode == "grandcanonical":
+            mu = self.muArray[bucketIndex]
+            return BoltzmannDistribution(self.tBucketBounds[bucketIndex], self.beta, mu)
+        
+        elif self.mode == "canonical":
+            return BoltzmannDistribution(self.tBucketBounds[bucketIndex], self.beta, 0.0)
+        
+        elif self.mode == "uniform":
+            return 1.0
+        else:
+            raise NotImplementedError("Only grandcanonical, canonical, and uniform modes are implemented.")
 
 
    

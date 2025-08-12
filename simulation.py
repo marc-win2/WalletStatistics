@@ -9,7 +9,8 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical"):
+    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, useBucketsForProbabilityComp = False,mode="canonical"):
+        self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
         ### for transaction handling
         self.transactionSet = [1e05] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
@@ -51,6 +52,7 @@ class SimulationHandler:
 
         if self.coinSelectionDistr.mode == "grandcanonical":
             print("Warning: CoinSelectionDistribution is in grandcanonical mode, this is not tested very well.")
+            print("Currently mu is by defualt set to 0.0")
     
     def simulateCurrentTransactionSet(self):
         """
@@ -61,7 +63,7 @@ class SimulationHandler:
         
         print("Simulation completed.")
 
-    def selectTokenFromDistribtion(self,transactionValue):
+    def selectTokenFromDistribtion(self, transactionValue):
         """
         Select a token from the distribution based on the transaction value.
         """
@@ -79,7 +81,61 @@ class SimulationHandler:
         selectedToken = self.highThroughputWallet.tokens[selectTokenIndex] if selectTokenIndex < len(self.highThroughputWallet.tokens) else [] # select the token from the wallet based on the index
         
         return selectedToken, selectTokenIndex, sumOfProbs[-1]
-         
+
+    def selectTokenBucketFromDistributionThenPickRandom(self):   
+        """
+        Select a token bucket from the distribution, then pick a random token from that bucket.
+        """
+        probs, intBoundsForDrawing = self.coinSelectionDistr.returnBucketProbabilitiesForFixedWalletState(tokenNoPerBucket=self.tokenNoPerBucket)
+        #print("probs = ", probs)
+        #print("intBoundsForDrawing = ", intBoundsForDrawing)
+        randomUniform = generateUniformFloats(self.ownrng, 1, 0.0, intBoundsForDrawing[-1]) # generate a random float in the range [0, intBoundsForDrawing[-1])
+        selectBucketIndex = np.searchsorted(intBoundsForDrawing, randomUniform, side='right')[0] #
+
+        tokenInBucket = self.findAllTokensInCertainBucket(selectBucketIndex) # find all tokens in the selected bucket
+
+        if tokenInBucket == []:
+            print("Warning: No tokens found in the selected bucket. Returning [].")
+            print("probs = ", probs)
+            print("intBoundsForDrawing = ", intBoundsForDrawing)
+            print("selectBucketIndex = ", selectBucketIndex, "intBoundsForDrawing = ", intBoundsForDrawing)
+            print("Wallet state:", self.highThroughputWallet)
+            print("Token buckets:", self.tokenBuckets)
+            print("Token no per bucket:", self.tokenNoPerBucket )
+            return [], -1, intBoundsForDrawing[-1]
+        
+        selectToken = self.ownrng.choice(tokenInBucket) # randomly select a token from the bucket
+        #print("Selected token from bucket:", selectToken, "from bucket index:", selectBucketIndex, "with value:", selectToken.value)
+        return selectToken, selectBucketIndex, intBoundsForDrawing[-1]
+    
+    def tokenSelectionProcess(self, transactionValue):
+        """
+        Process the token selection. Currently, the transactionValue is not used, but it might be used in other algorithms to select tokens based on the transaction value.
+        """
+        if self.useBucketsForProbabilityComp:
+            selectedToken, selectBucketIndex, sumOfBucketProbs = self.selectTokenBucketFromDistributionThenPickRandom()
+            if selectedToken is None:
+                print("Warning: No suitable token found in the selected bucket.")
+                return None, -1
+            return selectedToken, selectBucketIndex, sumOfBucketProbs
+        else:
+            selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(transactionValue)
+            if selectedToken == []:
+                print("Warning: No suitable token found for the transaction value.")
+                return None, -1
+            return selectedToken, selectTokenIndex, sumOfProbs
+
+    def findAllTokensInCertainBucket(self, bucketIndex):
+        """
+        Find all tokens in a certain bucket.
+        """
+        if bucketIndex < 0 or bucketIndex >= len(self.tokenBuckets):
+            print("Warning: Bucket index out of range.")
+            return []
+        
+        tokensInBucket = [token for token in self.highThroughputWallet.tokens if self.getTokensTokenBuckets(token.value) == bucketIndex]
+        return tokensInBucket
+
 
     def addTokenToOwnWallet(self, token):
         """
@@ -95,6 +151,23 @@ class SimulationHandler:
             print("Warning: Token value", token.value, "does not fit into any bucket. Please check the token denomination buckets.")
         #print("Added token with value", token.value, "and serial number", token.sno, "to the wallet. Current global token index is", self.__globalTokenIndex)
         #print("Curren tokenNoPerBucket is", self.tokenNoPerBucket)
+           
+    def removeTokenOwnWallet(self, token):
+        """
+        Remove a token from the wallet by its value.
+        """
+        if self.highThroughputWallet.searchTokenBySno(token.sno) is None:
+            print("Warning: Token with serial number", token.sno, "not found in the wallet.")
+            return
+        else:
+            self.highThroughputWallet.removeTokenBySno(token.sno)
+            bucketIndex = self.getTokensTokenBuckets(token.value)
+            if bucketIndex != -1:
+                self.tokenNoPerBucket[bucketIndex] -= 1
+            else:
+                print("Warning: Token value", token.value, "does not fit into any bucket. Please check the token denomination buckets.")
+
+
 
     def adjustBetaMicrocanonically(self):
         if self.depositMode == "uniform":
@@ -217,16 +290,11 @@ class SimulationHandler:
 
         
             if depositValue < 0.0:
-                val = self.highThroughputWallet.getTokenValue(self.__globalTokenIndex - 1) # it must be the last token added to the wallet which led to negative depositValue
+                removeToken = self.highThroughputWallet.selectTokenBySno(self.__globalTokenIndex - 1) # select the last token added to the wallet
+                val = removeToken.value # it must be the last token added to the wallet which led to negative depositValue
                 depositValue += val
-                self.highThroughputWallet.removeTokenBySno(self.__globalTokenIndex - 1)
-                bucketIndexRemoved = self.getTokensTokenBuckets(val)
-                if bucketIndexRemoved != -1:
-                    self.tokenNoPerBucket[bucketIndexRemoved] -= 1
-                else:
-                    print("Warning: Token value", val, "does not fit into any bucket. Please check the token denomination buckets.")
-                    raise ValueError("Token value does not fit into any bucket.")
-                depositWallet.removeTokenBySno(self.__globalTokenIndex - 1)
+                self.removeTokenOwnWallet(removeToken) # remove the last token added to the wallet
+                depositWallet.removeTokenBySno(removeToken.sno) # remove the last token added to the wallet
                 newToken = Token(depositValue, serialno=self.__globalTokenIndex - 1)
                 self.highThroughputWallet.addToken(newToken) # use the walletmemberfunction to add the token such that the globalTokenIndex is not incremented again
                 depositWallet.addToken(newToken)
@@ -258,9 +326,9 @@ class SimulationHandler:
                 print("Previous selected token was", selectedToken  )
                 print("Old wallet tokens were", freezeOverallWallet)
                 print("current transaction index is", self.currentTransactionIndex)
-            selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(remainingPaymentValue)
+            selectedToken, selectTokenIndex, sumOfProbs = self.tokenSelectionProcess(remainingPaymentValue)
             if selectedToken == []:
-                print("No suitable token smaller than bill value found for payment.")
+                print("No suitable token found for payment.")
                 if self.highThroughputWallet.isEmpty():
                     print("Wallet is empty, cannot proceed with payment.")
                     raise ValueError("Wallet is empty, cannot proceed with payment.")
@@ -270,13 +338,7 @@ class SimulationHandler:
                     selectedToken = selectRandom
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)
-            self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
-            bucketIndexRemoved = self.getTokensTokenBuckets(selectedToken.value)
-            if bucketIndexRemoved != -1:
-                self.tokenNoPerBucket[bucketIndexRemoved] -= 1
-            else:
-                print("Warning: Token value", selectedToken.value, "does not fit into any bucket. Please check the token denomination buckets.")
-                raise ValueError("Token value does not fit into any bucket.")
+            self.removeTokenOwnWallet(selectedToken)  # Remove the token from the wallet, and adjust counters
             prevPaymentValue = remainingPaymentValue
             remainingPaymentValue -= selectedToken.value
             if self.adjustBetaAfterEachTransaction:
