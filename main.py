@@ -65,7 +65,7 @@ def plotTransactionData(transactions, payments, deposits, plottingIndex=0):
             f.write(f"{t}\n")
 
 def singleSimulation(transactions, tokenDenominationBuckets, simulationIndex, drawDeposit=False, adjustBeta=True, doEmergRefund=True, mode="canonical"):
-    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, doEmergRefund=doEmergRefund, mode=mode, muGlobal=1e04)
+    simulation = SimulationHandler(tokenDenominationBuckets=tokenDenominationBuckets, beta=1e-03, drawDepositToken=drawDeposit, adjustBetaAfterEachTransaction=adjustBeta, doEmergRefund=doEmergRefund, mode=mode)
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
     simulation.prolongTransactionSet(transactions)
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
         #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=1000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=False, doEmergRefund=True,  mode="grandcanonical")
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=False, doEmergRefund=True,  mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []

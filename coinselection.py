@@ -20,7 +20,7 @@ class CoinSelectionDistribution:
     """
     Class to handle coin selection distribution calculations.
     """
-    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical", muGlobal=0.0):
+    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
   
@@ -32,7 +32,7 @@ class CoinSelectionDistribution:
 
         
         if self.mode == "grandcanonical":
-            self.setGrandCanonical(muGlobal)
+            self.setGrandCanonical()
 
         if self.mode == "canonical":
             self.setCanonical()

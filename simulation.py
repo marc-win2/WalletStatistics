@@ -9,7 +9,7 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical", muGlobal=None):
+    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, mode="canonical"):
         ### for transaction handling
         self.transactionSet = [1e05] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
@@ -40,8 +40,9 @@ class SimulationHandler:
             self.depositMode = "drawtokenFlexibleBeta"
         
         self.tokenBuckets = tokenDenominationBuckets # This is a list of token denomination buckets, e.g. [1, 1e01, 1e02] or [2e-01, 2e00, 2e01, 2e02] 
+        self.tokenNoPerBucket = [0] * len(self.tokenBuckets) # This is a list of the number of tokens in each bucket, initialized to zero
         self.highThroughputWallet = Wallet()
-        self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode, muGlobal=muGlobal) # Initialize the coin selection distribution with the given beta and token denomination buckets
+        self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode) # Initialize the coin selection distribution with the given beta and token denomination buckets
         
         
         self.initiateWallet()  # Initialize the wallet with a set of tokens
@@ -86,6 +87,13 @@ class SimulationHandler:
         """
         self.highThroughputWallet.addToken(token)
         self.__globalTokenIndex += 1
+        # Add +1 to the tokenNoPerBucket for the bucket the token belongs to
+        for i, bucket in enumerate(self.tokenBuckets):
+            if token.value < bucket and (i== 0 or token.value >= self.tokenBuckets[i-1]):
+                self.tokenNoPerBucket[i] += 1
+                break
+        print("Added token with value", token.value, "and serial number", token.sno, "to the wallet. Current global token index is", self.__globalTokenIndex)
+        print("Curren tokenNoPerBucket is", self.tokenNoPerBucket)
 
     def adjustBetaMicrocanonically(self):
         if self.depositMode == "uniform":
