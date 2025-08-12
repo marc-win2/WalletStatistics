@@ -88,10 +88,11 @@ class SimulationHandler:
         self.highThroughputWallet.addToken(token)
         self.__globalTokenIndex += 1
         # Add +1 to the tokenNoPerBucket for the bucket the token belongs to
-        for i, bucket in enumerate(self.tokenBuckets):
-            if token.value < bucket and (i== 0 or token.value >= self.tokenBuckets[i-1]):
-                self.tokenNoPerBucket[i] += 1
-                break
+        bucketIndex = self.getTokensTokenBuckets(token.value)
+        if bucketIndex != -1:
+            self.tokenNoPerBucket[bucketIndex] += 1
+        else:
+            print("Warning: Token value", token.value, "does not fit into any bucket. Please check the token denomination buckets.")
         #print("Added token with value", token.value, "and serial number", token.sno, "to the wallet. Current global token index is", self.__globalTokenIndex)
         #print("Curren tokenNoPerBucket is", self.tokenNoPerBucket)
 
@@ -127,14 +128,15 @@ class SimulationHandler:
         beta = self.coinSelectionDistr.beta
         noBuckets = len(self.tokenBuckets)
         desiredNoPerBucket = tokenCount / noBuckets
+        muValueArray = [0.0] * noBuckets
         for i in range(noBuckets):
             muValue = None
             if i != 0:
                 muValue = (self.tokenBuckets[i-1] + self.tokenBuckets[i]) / 2.0 + np.log(desiredNoPerBucket) / beta
             else:
                 muValue = self.tokenBuckets[i] / 2.0 + np.log(desiredNoPerBucket) / beta
-            
-            self.coinSelectionDistr.muArray[i] = muValue
+            muValueArray[i] = muValue
+        self.coinSelectionDistr.setMuArray(muValueArray)
 
     def initiateWallet(self):
         """
@@ -167,7 +169,16 @@ class SimulationHandler:
         self.currentTransactionIndex += 1
 
         
-            
+    def getTokensTokenBuckets(self, valueOfToken):
+        """
+        Get the token buckets for a given token value.
+        This is used to find the appropriate bucket for a token based on its value.
+        """
+        for i, bucket in enumerate(self.tokenBuckets):
+            if valueOfToken < bucket and (i == 0 or valueOfToken >= self.tokenBuckets[i-1]):
+                return i
+        return -1
+
     
     def handleDeposit(self, depositValue):
         """
@@ -209,6 +220,12 @@ class SimulationHandler:
                 val = self.highThroughputWallet.getTokenValue(self.__globalTokenIndex - 1) # it must be the last token added to the wallet which led to negative depositValue
                 depositValue += val
                 self.highThroughputWallet.removeTokenBySno(self.__globalTokenIndex - 1)
+                bucketIndexRemoved = self.getTokensTokenBuckets(val)
+                if bucketIndexRemoved != -1:
+                    self.tokenNoPerBucket[bucketIndexRemoved] -= 1
+                else:
+                    print("Warning: Token value", val, "does not fit into any bucket. Please check the token denomination buckets.")
+                    raise ValueError("Token value does not fit into any bucket.")
                 depositWallet.removeTokenBySno(self.__globalTokenIndex - 1)
                 newToken = Token(depositValue, serialno=self.__globalTokenIndex - 1)
                 self.highThroughputWallet.addToken(newToken) # use the walletmemberfunction to add the token such that the globalTokenIndex is not incremented again
@@ -254,6 +271,12 @@ class SimulationHandler:
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)
             self.highThroughputWallet.removeTokenBySno(selectedToken.sno)
+            bucketIndexRemoved = self.getTokensTokenBuckets(selectedToken.value)
+            if bucketIndexRemoved != -1:
+                self.tokenNoPerBucket[bucketIndexRemoved] -= 1
+            else:
+                print("Warning: Token value", selectedToken.value, "does not fit into any bucket. Please check the token denomination buckets.")
+                raise ValueError("Token value does not fit into any bucket.")
             prevPaymentValue = remainingPaymentValue
             remainingPaymentValue -= selectedToken.value
             if self.adjustBetaAfterEachTransaction:
