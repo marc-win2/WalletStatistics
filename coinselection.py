@@ -47,10 +47,10 @@ class CoinSelectionDistribution:
         """
         Pick a bucket based on the precomputed probabilities. Set Probabilities to zero for empty buckets.
         """
-        probabilities = self.preComputedProbabilities.copy()
+        probabilities = [0.0]* len(self.tBucketBounds)
         for i, bucket in enumerate(self.tBucketBounds):
-            if tokenNoPerBucket[i] == 0: ## return zero probability for empty buckets
-                probabilities[i] = 0.0
+            if tokenNoPerBucket[i] != 0: ## return zero probability for empty buckets
+                probabilities[i] = self.compProbabilityForBucket(i)
 
 
 
