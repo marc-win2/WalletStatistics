@@ -2,7 +2,7 @@
 import numpy as np
 from transaction import initializeRandomNumGenerator, generateUniformFloats 
 from coinselection import CoinSelectionDistribution
-from wallet import Token, Wallet
+from wallet import MINIMUM_DENOMINATION, Token, Wallet, roundToMinimumDenomination
 
 
 class SimulationHandler:
@@ -41,6 +41,8 @@ class SimulationHandler:
             self.depositMode = "drawtokenFlexibleBeta"
         
         self.tokenBuckets = tokenDenominationBuckets # This is a list of token denomination buckets, e.g. [1, 1e01, 1e02] or [2e-01, 2e00, 2e01, 2e02] 
+        self.smallestDenomination = MINIMUM_DENOMINATION
+        self.betaApproximationFactor = 10.0
         self.tokenNoPerBucket = [0] * len(self.tokenBuckets) # This is a list of the number of tokens in each bucket, initialized to zero
         self.highThroughputWallet = Wallet()
         self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode) # Initialize the coin selection distribution with the given beta and token denomination buckets
@@ -182,6 +184,60 @@ class SimulationHandler:
             if tokenCount == 0:
                 tokenCount = 1
             self.coinSelectionDistr.setBeta(tokenCount / totalValue)  # Adjust beta based on the number of tokens and total value in the wallet
+
+    def adjustBetaMicroExact(self):
+        """
+        Set beta using the exact microcanonical expression.
+
+        For token count n, total wallet value E, and smallest denomination
+        d_s, beta is sum(1 / (E - k*d_s)) for k from 1 to n - 1.
+        """
+        tokenCount = self.highThroughputWallet.getTokenCount()
+        totalValue = self.highThroughputWallet.getTotalValue()
+
+        if tokenCount <= 1:
+            beta = 0.0
+        else:
+            smallestDenominator = totalValue - (tokenCount - 1) * self.smallestDenomination
+            if smallestDenominator <= 0.0:
+                raise ValueError(
+                    "Exact microcanonical beta is undefined because "
+                    "E - (n - 1) * d_s must be positive."
+                )
+            beta = sum(
+                1.0 / (totalValue - k * self.smallestDenomination)
+                for k in range(1, tokenCount)
+            )
+
+        self.coinSelectionDistr.setBeta(beta)
+        return beta
+
+    def adjustBetaMicroApprox(self):
+        """
+        Set beta using (n - 1) / E when E is sufficiently large.
+
+        Fall back to the exact expression when E is not larger than the
+        configurable approximation threshold factor * (n - 1) * d_s.
+        """
+        tokenCount = self.highThroughputWallet.getTokenCount()
+        totalValue = self.highThroughputWallet.getTotalValue()
+        approximationThreshold = (
+            self.betaApproximationFactor
+            * (tokenCount - 1)
+            * self.smallestDenomination
+        )
+
+        if tokenCount <= 1:
+            beta = 0.0
+            self.coinSelectionDistr.setBeta(beta)
+            return beta
+
+        if totalValue > approximationThreshold:
+            beta = (tokenCount - 1) / totalValue
+            self.coinSelectionDistr.setBeta(beta)
+            return beta
+
+        return self.adjustBetaMicroExact()
     
     def adjustMuArrayBucketWise(self):
         """
@@ -248,7 +304,7 @@ class SimulationHandler:
         This is used to find the appropriate bucket for a token based on its value.
         """
         for i, bucket in enumerate(self.tokenBuckets):
-            if valueOfToken < bucket and (i == 0 or valueOfToken >= self.tokenBuckets[i-1]):
+            if valueOfToken <= bucket and (i == 0 or valueOfToken > self.tokenBuckets[i-1]):
                 return i
         return -1
 
@@ -260,6 +316,8 @@ class SimulationHandler:
         New serial numbers are assigned to the tokens.
         the globalTokenIndex is incremented for each new token added.
         """
+        depositValue = roundToMinimumDenomination(depositValue)
+
         if depositValue < 0.0:
             print("Deposit value must be positive.")
             return Wallet()
@@ -281,23 +339,15 @@ class SimulationHandler:
         elif self.depositMode == "drawtokenFlexibleBeta":
             while depositValue > 0.0:
                 val = self.coinSelectionDistr.pickValueFromContinuousDistributionWithBetaAdjustment(originalDepositValue)
-                token = Token(val, serialno=self.__globalTokenIndex)
+                val = roundToMinimumDenomination(val)
+                if val < MINIMUM_DENOMINATION:
+                    continue
+                token = Token(min(val, depositValue), serialno=self.__globalTokenIndex)
                 self.addTokenToOwnWallet(token) # increment globalTokenIndex because a new token is added and sno are uniquely assigned
                 depositWallet.addToken(token)
-                depositValue -= val
+                depositValue = roundToMinimumDenomination(depositValue - token.value)
                 if self.adjustBetaAfterEachTransaction:
                     self.adjustBetaMicrocanonically()
-
-        
-            if depositValue < 0.0:
-                removeToken = self.highThroughputWallet.selectTokenBySno(self.__globalTokenIndex - 1) # select the last token added to the wallet
-                val = removeToken.value # it must be the last token added to the wallet which led to negative depositValue
-                depositValue += val
-                self.removeTokenOwnWallet(removeToken) # remove the last token added to the wallet
-                depositWallet.removeTokenBySno(removeToken.sno) # remove the last token added to the wallet
-                newToken = Token(depositValue, serialno=self.__globalTokenIndex - 1)
-                self.highThroughputWallet.addToken(newToken) # use the walletmemberfunction to add the token such that the globalTokenIndex is not incremented again
-                depositWallet.addToken(newToken)
                 
 
         return depositWallet
@@ -307,12 +357,14 @@ class SimulationHandler:
         Handle a payment transaction by selecting tokens from the wallet.
         paymentValue should be negative, representing the amount to be paid.
         """
+        paymentValue = roundToMinimumDenomination(paymentValue)
+
         if paymentValue >= 0.0:
             print("Payment value must be negative.")
             return
         
         freezeOverallWallet = self.highThroughputWallet.tokens
-        remainingPaymentValue = -paymentValue
+        remainingPaymentValue = roundToMinimumDenomination(-paymentValue)
         selectedWallet = Wallet()
         
         while remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > 1e-06:
@@ -340,7 +392,9 @@ class SimulationHandler:
             selectedWallet.addToken(selectedToken)
             self.removeTokenOwnWallet(selectedToken)  # Remove the token from the wallet, and adjust counters
             prevPaymentValue = remainingPaymentValue
-            remainingPaymentValue -= selectedToken.value
+            remainingPaymentValue = roundToMinimumDenomination(
+                remainingPaymentValue - selectedToken.value
+            )
             if self.adjustBetaAfterEachTransaction:
                 self.adjustBetaMicrocanonically()
 
@@ -402,7 +456,11 @@ class SimulationHandler:
         """
         Prolong the transaction set with new transactions. Typically used because the transaction set is initialized with a single transaction.
         """
-        self.transactionSet.extend(newTransactions)
+        roundedTransactions = [
+            roundToMinimumDenomination(transaction)
+            for transaction in newTransactions
+        ]
+        self.transactionSet.extend(roundedTransactions)
         self.transactionSetSize = len(self.transactionSet)
         self.tokenCountInvolvedInTransaction.extend([None] * len(newTransactions))
         self.totalValueHistory.extend([None] * len(newTransactions))

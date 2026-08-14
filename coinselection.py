@@ -285,10 +285,10 @@ class CoinSelectionDistribution:
         """
         Compute the distribution for a given token value.
         """
-        if tokenValue < 0.0 or tokenValue >= self.tBucketBounds[-1]:
+        if tokenValue < 0.0 or tokenValue > self.tBucketBounds[-1]:
             return 0.0
 
-        bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='right')
+        bucketIndex = np.searchsorted(self.tBucketBounds, tokenValue, side='left')
         if bucketIndex < 0 or bucketIndex >= len(self.muArray):
             return 0.0
 
@@ -300,7 +300,7 @@ class CoinSelectionDistribution:
         """
         Compute the canonical distribution for a given token value.
         """
-        if tokenValue < 0.0 or tokenValue >= self.tBucketBounds[-1]:
+        if tokenValue < 0.0 or tokenValue > self.tBucketBounds[-1]:
             return 0.0
         energy = tokenValue
         return BoltzmannDistribution(energy, self.beta, 0.0)

@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.integrate import quad
+from wallet import DENOMINATION_DECIMAL_PLACES, roundToMinimumDenomination
 
 
 def initializeRandomNumGenerator(seed=None):
@@ -50,14 +51,14 @@ class RandomTransactionGenerator:
         Generate a random transaction with uniform distribution.
         """
         transactionValue = self.rng.uniform(-1.0*self.maxAbsTransactionValue, self.maxAbsTransactionValue)
-        return transactionValue
+        return roundToMinimumDenomination(transactionValue)
     
     def generateTransationUniformPoitive(self):
         """
         Generate a random transaction with uniform distribution, but only positive values.
         """
         transactionValue = self.rng.uniform(0.0, self.maxAbsTransactionValue)
-        return transactionValue
+        return roundToMinimumDenomination(transactionValue)
     
     def generateTransactionGaussian(self, stdDev=1.0, mean=0.0):
         """
@@ -67,7 +68,7 @@ class RandomTransactionGenerator:
         # Ensure the transaction value is within the allowed range
         if np.abs(transactionValue) > self.maxAbsTransactionValue:
             transactionValue = np.sign(transactionValue)*( np.abs(transactionValue) - self.maxAbsTransactionValue )
-        return transactionValue
+        return roundToMinimumDenomination(transactionValue)
     
     
     def generateNTransactionsGaussian(self, n, stdDev=1000.0, mean=0.0):
@@ -77,7 +78,8 @@ class RandomTransactionGenerator:
         # Ensure all transaction values are within the allowed range
         transactions = generateGaussianFloats(self.rng, n, mean, stdDev)
         transactions = np.clip(transactions, -self.maxAbsTransactionValue, self.maxAbsTransactionValue) # Ensure all transactions are within the allowed range
-        transactions =  [ t for t in transactions if ((np.abs(t) < 1e-03) == False)] # Ensure no transaction is too small
+        transactions = np.round(transactions, DENOMINATION_DECIMAL_PLACES)
+        transactions = [t for t in transactions if t != 0.0]
         return transactions
     
     def generateTransactionDirichlet(self, alpha, sumValue = 2000, sizealpha=10):
@@ -86,6 +88,12 @@ class RandomTransactionGenerator:
         """
         alphavec = [alpha] * sizealpha
         transactionValue = self.rng.dirichlet(alphavec) * sumValue
+        transactionValue = np.round(transactionValue, DENOMINATION_DECIMAL_PLACES)
+        roundingDifference = roundToMinimumDenomination(sumValue - np.sum(transactionValue))
+        largestValueIndex = np.argmax(transactionValue)
+        transactionValue[largestValueIndex] = roundToMinimumDenomination(
+            transactionValue[largestValueIndex] + roundingDifference
+        )
         # Ensure the transaction value is within the allowed range
         if sum(transactionValue) > self.maxAbsTransactionValue:
             raise ValueError("Transaction value exceeds maximum allowed value.")
@@ -102,6 +110,7 @@ class RandomTransactionGenerator:
         
         normalTransactions = self.generateNTransactionsGaussian(numNormal, stdDev, mean)
         outlierTransactions = generateUniformFloats(self.rng, numOutliers, 0.95*self.maxAbsTransactionValue, self.maxAbsTransactionValue)
+        outlierTransactions = np.round(outlierTransactions, DENOMINATION_DECIMAL_PLACES)
         
         transactions = np.concatenate((normalTransactions, outlierTransactions))
         self.rng.shuffle(transactions)

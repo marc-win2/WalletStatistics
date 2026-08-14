@@ -2,13 +2,27 @@
 import numpy as np
 
 
+MINIMUM_DENOMINATION = 0.01
+DENOMINATION_DECIMAL_PLACES = 2
+
+
+def roundToMinimumDenomination(value):
+    """Round a monetary value to the smallest supported denomination."""
+    return round(float(value), DENOMINATION_DECIMAL_PLACES)
+
+
 
 class Token:
     """
     Class to represent a token with a value.
     """
     def __init__(self, value, serialno=None):
-        self.value = value
+        roundedValue = roundToMinimumDenomination(value)
+        if roundedValue < MINIMUM_DENOMINATION:
+            raise ValueError(
+                f"Token value must be at least {MINIMUM_DENOMINATION:.2f}."
+            )
+        self.value = roundedValue
         self.sno = serialno ## typical an integer in this simulation 
 
     def __repr__(self):
@@ -79,7 +93,7 @@ class Wallet:
         """
         Get the total value of all tokens in the wallet.
         """
-        return sum(token.value for token in self.tokens)
+        return roundToMinimumDenomination(sum(token.value for token in self.tokens))
 
     def isEmpty(self):
         """
@@ -87,4 +101,3 @@ class Wallet:
         """
         return len(self.tokens) == 0
     
-
