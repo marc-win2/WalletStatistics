@@ -12,7 +12,7 @@ class SimulationHandler:
     def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, useBucketsForProbabilityComp = False,mode="canonical"):
         self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
         ### for transaction handling
-        self.transactionSet = [1e05] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution       
+        self.transactionSet = [1e07] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
         self.distMode = mode # "canonical", "grandcanonical", "uniform"

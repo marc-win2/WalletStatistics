@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    numSimulations = 10
+    numSimulations = 100
 
     addPrefix = "."# "./Simulations/Gaussian_Boltzmannadjustbeta_normalrefund" #"Dirichlet_BoltzmannBetaadjusted_noinitialfunding1"#"Dirichtlet_canonicaladjustbeta_run1"
     dataPath = addPrefix + "/Data/"

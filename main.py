@@ -274,7 +274,7 @@ if __name__ == "__main__":
     # print("Exp. value of Dirichlet payments:", np.mean(safeFloats), "+-", np.std(safeFloats))
 
 
-    numSimulations = 10
+    numSimulations = 100
     alltokenValues = []
     totalTransaction = []
     totalValues = []
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     for i in range(numSimulations):
         transactions, deposits, payments = generateDoubleGaussianTransactionsAndPlotThem(plottingIndex=i, noPayments=100000, xFactor=3) # noDeposits = xFactor * noPayments
         #transactions, deposits, payments = generateTransactions_PaymentsDirichlet_AndPlotThem(plottingIndex=i, noDeposits=1000, xFactor=10) # noPayments = xFactor * noDeposits
-        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, doEmergRefund=True, useBuckets=True, mode="canonical")
+        tokenVals, maxTokenValRemoved, totalValue, totalTokensInWallet, tokenCountPerT, tokenCountHistory, totalValueHistory = singleSimulation(transactions, tokenDenominationBuckets, i, drawDeposit=False, adjustBeta=True, doEmergRefund=False, useBuckets=False, mode="canonical")
 
         ## handle paymentTOkenCount here and generate Data and Plot
         paymentTokenCount = []
