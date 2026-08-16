@@ -73,7 +73,7 @@ def singleSimulation(
     doEmergRefund=True,
     useBuckets=False,
     mode="canonical",
-    betaAdjustmentMode="microcanonical",
+    betaAdjustmentMode="legacy",
 ):
     simulation = SimulationHandler(
         tokenDenominationBuckets=tokenDenominationBuckets,
@@ -313,7 +313,7 @@ if __name__ == "__main__":
             doEmergRefund=False,
             useBuckets=False,
             mode="canonical",
-            betaAdjustmentMode="microcanonical",
+            betaAdjustmentMode="legacy",
         )
 
         ## handle paymentTOkenCount here and generate Data and Plot

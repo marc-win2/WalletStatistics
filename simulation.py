@@ -9,7 +9,11 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    BETA_ADJUSTMENT_MODES = ("microcanonical", "exact", "approximate")
+    BETA_ADJUSTMENT_MODES = (
+        "legacy",
+        "microcanonicalExact",
+        "microcanonicalApprox",
+    )
 
     def __init__(
         self,
@@ -20,7 +24,7 @@ class SimulationHandler:
         doEmergRefund=True,
         useBucketsForProbabilityComp=False,
         mode="canonical",
-        betaAdjustmentMode="microcanonical",
+        betaAdjustmentMode="legacy",
     ):
         self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
         ### for transaction handling
@@ -254,11 +258,11 @@ class SimulationHandler:
 
     def adjustBetaDynamically(self):
         """Adjust beta using the configured beta adjustment mode."""
-        if self.betaAdjustmentMode == "microcanonical":
+        if self.betaAdjustmentMode == "legacy":
             return self.adjustBetaMicrocanonically()
-        if self.betaAdjustmentMode == "exact":
+        if self.betaAdjustmentMode == "microcanonicalExact":
             return self.adjustBetaMicroExact()
-        if self.betaAdjustmentMode == "approximate":
+        if self.betaAdjustmentMode == "microcanonicalApprox":
             return self.adjustBetaMicroApprox()
         raise ValueError(f"Unsupported beta adjustment mode: {self.betaAdjustmentMode}")
 
