@@ -9,12 +9,25 @@ class SimulationHandler:
     """
     Class to handle simulation of coinselection.
     """
-    def __init__(self, tokenDenominationBuckets, beta = 0.1, drawDepositToken = False, adjustBetaAfterEachTransaction = False, doEmergRefund = True, useBucketsForProbabilityComp = False,mode="canonical"):
+    BETA_ADJUSTMENT_MODES = ("microcanonical", "exact", "approximate")
+
+    def __init__(
+        self,
+        tokenDenominationBuckets,
+        beta=0.1,
+        drawDepositToken=False,
+        adjustBetaAfterEachTransaction=False,
+        doEmergRefund=True,
+        useBucketsForProbabilityComp=False,
+        mode="canonical",
+        betaAdjustmentMode="microcanonical",
+    ):
         self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
         ### for transaction handling
         self.transactionSet = [1e07] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
-        self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaMicrocanonically() after each transaction
+        self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaDynamically() after each transaction
+        self.setBetaAdjustmentMode(betaAdjustmentMode)
         self.distMode = mode # "canonical", "grandcanonical", "uniform"
         self.doEmergenceRefund = doEmergRefund # If True, the emergence refund is triggered if the total value of the wallet is below a certain threshold
         if self.distMode == "uniform":
@@ -238,6 +251,25 @@ class SimulationHandler:
             return beta
 
         return self.adjustBetaMicroExact()
+
+    def adjustBetaDynamically(self):
+        """Adjust beta using the configured beta adjustment mode."""
+        if self.betaAdjustmentMode == "microcanonical":
+            return self.adjustBetaMicrocanonically()
+        if self.betaAdjustmentMode == "exact":
+            return self.adjustBetaMicroExact()
+        if self.betaAdjustmentMode == "approximate":
+            return self.adjustBetaMicroApprox()
+        raise ValueError(f"Unsupported beta adjustment mode: {self.betaAdjustmentMode}")
+
+    def setBetaAdjustmentMode(self, betaAdjustmentMode):
+        """Select the formula used by subsequent dynamic beta updates."""
+        if betaAdjustmentMode not in self.BETA_ADJUSTMENT_MODES:
+            raise ValueError(
+                "Invalid beta adjustment mode. Choose from "
+                f"{', '.join(self.BETA_ADJUSTMENT_MODES)}."
+            )
+        self.betaAdjustmentMode = betaAdjustmentMode
     
     def adjustMuArrayBucketWise(self):
         """
@@ -290,7 +322,7 @@ class SimulationHandler:
 
         self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = initiationWallet.getTokenCount()
         if self.adjustBetaAfterEachTransaction:
-            self.adjustBetaMicrocanonically()
+            self.adjustBetaDynamically()
 
         self.doWalletStateTracking()  # Track the number of tokens in the wallet after each transaction and the total value of the wallet
 
@@ -347,7 +379,7 @@ class SimulationHandler:
                 depositWallet.addToken(token)
                 depositValue = roundToMinimumDenomination(depositValue - token.value)
                 if self.adjustBetaAfterEachTransaction:
-                    self.adjustBetaMicrocanonically()
+                    self.adjustBetaDynamically()
                 
 
         return depositWallet
@@ -396,7 +428,7 @@ class SimulationHandler:
                 remainingPaymentValue - selectedToken.value
             )
             if self.adjustBetaAfterEachTransaction:
-                self.adjustBetaMicrocanonically()
+                self.adjustBetaDynamically()
 
         if remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > self.eps:
             print(f"Warning: Remaining payment value {remainingPaymentValue} could not be covered by available tokens.")
@@ -435,7 +467,7 @@ class SimulationHandler:
             self.tokenCountInvolvedInTransaction[self.currentTransactionIndex] = newTokens.getTokenCount()
         
         if self.adjustBetaAfterEachTransaction:
-            self.adjustBetaMicrocanonically()
+            self.adjustBetaDynamically()
         
         self.doWalletStateTracking()  # Track the number of tokens in the wallet after each transaction and the total value of the wallet
         # if self.highThroughputWallet.getTokenCount() < 2 and self.currentTransactionIndex > 15: ## adjust this to whatever special behavior you want to be warned about
