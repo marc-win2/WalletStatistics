@@ -49,6 +49,15 @@ class MainTests(unittest.TestCase):
         )
         self.assertEqual(counts, [2, 3])
 
+    def test_payment_token_counts_can_preserve_zero_value_slots(self):
+        counts = main.getPaymentTokenCounts(
+            transactions=[-10.0, -0.0, 5.0, -4.0],
+            tokenCountPerTransaction=[1, 2, 0, 1, 3],
+            includeZeroValuePayments=True,
+        )
+
+        self.assertEqual(counts, [2, 0, 3])
+
     def test_value_writers_use_documented_formats(self):
         with tempfile.TemporaryDirectory() as temporaryDirectory:
             root = Path(temporaryDirectory)

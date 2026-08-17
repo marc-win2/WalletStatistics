@@ -372,14 +372,21 @@ def prepareOutputDirectories(
     )
 
 
-def getPaymentTokenCounts(transactions, tokenCountPerTransaction):
-    """Extract token counts for payment transactions, excluding initial funding."""
+def getPaymentTokenCounts(
+    transactions,
+    tokenCountPerTransaction,
+    includeZeroValuePayments=False,
+):
+    """Extract payment token counts while excluding initial funding."""
     paymentTokenCounts = []
     for transactionIndex, tokenCount in enumerate(tokenCountPerTransaction):
         if transactionIndex == 0:
             continue
         transactionIndex -= 1
-        if transactions[transactionIndex] < 0:
+        transactionValue = transactions[transactionIndex]
+        if transactionValue < 0 or (
+            includeZeroValuePayments and transactionValue == 0
+        ):
             paymentTokenCounts.append(tokenCountPerTransaction[transactionIndex + 1])
     return paymentTokenCounts
 
@@ -504,6 +511,7 @@ def runSimulationBatch(
         paymentTokenCounts = getPaymentTokenCounts(
             transactions,
             tokenCountPerTransaction,
+            includeZeroValuePayments=(transactionScenario == 'dirichletFloat'),
         )
         paymentMean, paymentStddev = savePaymentTokenCounts(
             paymentTokenCounts,

@@ -1,8 +1,23 @@
 # WalletStatistics
 
-Python simulation code for the **Boltzmann Draw**, a probabilistic coin-selection
-method for token-based payment systems. The implementation accompanies the paper
+Independent Python simulation code for the **Boltzmann Draw**, a probabilistic
+coin-selection method for token-based payment systems. This implementation is
+related to the paper
 [Coin selection by Random Draw according to the Boltzmann distribution](https://arxiv.org/abs/2602.17490).
+
+## Relationship to the paper and data availability
+
+Marc Winstel is a co-author of the corresponding paper and developed this code
+as an independent implementation for verifying and cross-checking its results.
+This repository was not the primary codebase used to generate the numerical data
+reported in the paper.
+
+Those data were generated independently by two other co-authors using separate
+codebases. Their implementations and result data are not publicly available at
+this time. This repository should therefore be understood as an independent
+validation implementation and research simulator, not as the paper's complete
+reproduction package. It can generate its own simulation results for the models
+and scenarios documented below.
 
 ## Model
 
