@@ -66,6 +66,30 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(simulation.highThroughputWallet.getTokenCount(), 1)
         self.assertEqual(selectedWallet.getTokenCount(), 2)
 
+    def test_payment_from_empty_wallet_is_rejected_without_modification(self):
+        simulation = make_simulation()
+        set_wallet(simulation, [])
+
+        with self.assertRaisesRegex(ValueError, "Insufficient wallet funds"):
+            simulation.handlePayment(-1.0)
+
+        self.assertEqual(simulation.highThroughputWallet.getTokenCount(), 0)
+        self.assertEqual(simulation.highThroughputWallet.getTotalValue(), 0)
+
+    def test_uncovered_payment_is_rejected_without_modifying_wallet(self):
+        simulation = make_simulation()
+        set_wallet(simulation, [3.0, 7.0])
+        originalTokens = list(simulation.highThroughputWallet.tokens)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"payment requires 10\.01, but only 10\.00 is available",
+        ):
+            simulation.handlePayment(-10.01)
+
+        self.assertEqual(simulation.highThroughputWallet.tokens, originalTokens)
+        self.assertEqual(simulation.highThroughputWallet.getTotalValue(), 10.0)
+
     def test_prolonged_transactions_are_rounded_to_cents(self):
         simulation = make_simulation()
         simulation.prolongTransactionSet([1.234, -2.345])

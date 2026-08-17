@@ -401,35 +401,40 @@ class SimulationHandler:
             print("Payment value must be negative.")
             return
         
-        freezeOverallWallet = self.highThroughputWallet.tokens
         remainingPaymentValue = roundToMinimumDenomination(-paymentValue)
+
+        # Reject uncovered payments before selecting any tokens so that a
+        # failed payment cannot leave the wallet partially modified.
+        availableValue = roundToMinimumDenomination(
+            self.highThroughputWallet.getTotalValue()
+        )
+        if availableValue < remainingPaymentValue:
+            raise ValueError(
+                "Insufficient wallet funds: payment requires "
+                f"{remainingPaymentValue:.2f}, but only {availableValue:.2f} "
+                "is available."
+            )
+
         selectedWallet = Wallet()
         
         while remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > 1e-06:
             if self.highThroughputWallet.isEmpty():
-                print("Wallet is empty, cannot proceed with payment.")
-                print("Overall payment value was", -paymentValue)
-                print("Previous payment value was ", prevPaymentValue)
-                print("Selected tokens are", selectedWallet)
-                print("Their sum is", selectedWallet.getTotalValue())
-                print("Remaining payment value is", remainingPaymentValue   )
-                print("Previous selected token was", selectedToken  )
-                print("Old wallet tokens were", freezeOverallWallet)
-                print("current transaction index is", self.currentTransactionIndex)
+                raise RuntimeError(
+                    "Wallet became empty despite passing the available-funds "
+                    "check."
+                )
             selectedToken, selectTokenIndex, sumOfProbs = self.tokenSelectionProcess(remainingPaymentValue)
             if selectedToken == []:
                 print("No suitable token found for payment.")
                 if self.highThroughputWallet.isEmpty():
                     print("Wallet is empty, cannot proceed with payment.")
                     raise ValueError("Wallet is empty, cannot proceed with payment.")
-                    return
                 else:
                     selectRandom = self.highThroughputWallet.selectTokenRandomly()
                     selectedToken = selectRandom
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)
             self.removeTokenOwnWallet(selectedToken)  # Remove the token from the wallet, and adjust counters
-            prevPaymentValue = remainingPaymentValue
             remainingPaymentValue = roundToMinimumDenomination(
                 remainingPaymentValue - selectedToken.value
             )
