@@ -1,8 +1,8 @@
 # Created by Marc Winstel on 14.07.25
+import argparse
 import numpy as np 
 import matplotlib.pyplot as plt
 import os
-from scipy.integrate import quad
 from transaction import RandomTransactionGenerator
 from coinselection import CoinSelectionDistribution
 from wallet import Token, Wallet
@@ -769,8 +769,35 @@ def runBetaAdjustmentExperimentMatrix(
     return experimentDirectories
 
 
-def main():
+def paymentIterationCount(value):
+    """Validate a payment count for both experiment-matrix workloads."""
+    numberOfPayments = int(value)
+    if numberOfPayments <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    if numberOfPayments % 10 != 0:
+        raise argparse.ArgumentTypeError(
+            "must be divisible by 10 for the Dirichlet workload"
+        )
+    return numberOfPayments
+
+
+def parseCommandLineArguments(arguments=None):
+    """Parse command-line options for the experiment matrix."""
+    parser = argparse.ArgumentParser(
+        description="Run the Boltzmann Draw beta-adjustment experiment matrix."
+    )
+    parser.add_argument(
+        "--num_iter",
+        type=paymentIterationCount,
+        default=100,
+        help="number of payments per simulation run (default: 100)",
+    )
+    return parser.parse_args(arguments)
+
+
+def main(arguments=None):
     """Execute the six-run beta-adjustment experiment matrix."""
+    commandLineArguments = parseCommandLineArguments(arguments)
     tokens = [10**i for i in range(-2, 10)]
     global tokenDenominationBuckets
     tokenDenominationBuckets = tokens
@@ -800,7 +827,7 @@ def main():
         tokenDenominationBuckets,
         outputRoot='Simulations/BetaAdjustmentMatrix',
         numSimulations=100,
-        noPayments=100000,
+        noPayments=commandLineArguments.num_iter,
     )
 
 

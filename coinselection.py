@@ -2,7 +2,6 @@
 import numpy as np
 from math import floor
 
-from sympy import det
 from transaction import initializeRandomNumGenerator, generateUniformFloats, generateGaussianFloats
 
 
@@ -86,7 +85,7 @@ class CoinSelectionDistribution:
         return [token for token in tokenSetInWallet if token.value <= transactionValue]
     
     def compDistributionDiscrSet(self, tokenSetInWallet, transactionValue):
-        """
+        r"""
         Compute the coin selection distribution for a set of tokens, given a fixed transaction value.
         the probabilities are computed as p(t.value) = exp(-beta * t.value)
         Denominator  contains \sum_t exp(-beta * t.value) for the distribution of a set of tokens (does not use the function removeTokensHigherThanTransactionValue to optimize computation time).

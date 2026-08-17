@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper."
+title: "WalletStatistics: Boltzmann Draw coin-selection simulator"
+type: software
+authors:
+  - family-names: "Winstel"
+    given-names: "Marc"
+repository-code: "https://github.com/marc-win2/WalletStatistics"
+license: MIT
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Bönsel"
+      given-names: "Jan Lennart"
+    - family-names: "Maurer"
+      given-names: "Michael"
+    - family-names: "Petriconi"
+      given-names: "Silvio"
+    - family-names: "Tundis"
+      given-names: "Andrea"
+    - family-names: "Winstel"
+      given-names: "Marc"
+  title: "Coin selection by Random Draw according to the Boltzmann distribution"
+  journal: "arXiv"
+  year: 2026
+  doi: "10.48550/arXiv.2602.17490"
+  url: "https://arxiv.org/abs/2602.17490"

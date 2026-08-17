@@ -3,6 +3,20 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 
+def meanAndStd(values):
+    """Return the population mean and standard deviation of sample values."""
+    return np.mean(values), np.std(values)
+
+
+def extendWithValues(destination, values):
+    """Append a scalar or extend an iterable of values into a result list."""
+    convertedValues = np.asarray(values).tolist()
+    if isinstance(convertedValues, list):
+        destination.extend(convertedValues)
+    else:
+        destination.append(convertedValues)
+
+
 
 
 if __name__ == "__main__":
@@ -54,11 +68,13 @@ if __name__ == "__main__":
 
 
         for j in np.arange(stepSize):
-            avgTotalValues.append(np.mean(tv_[j]))
-            stdDevTotalValues.append(np.std(tv_[j]))
+            avgTotalValue, stdDevTotalValue = meanAndStd(tv_[j])
+            avgTotalValues.append(avgTotalValue)
+            stdDevTotalValues.append(stdDevTotalValue)
 
-            avgTotalTokensInWallets.append(np.mean(tT_[j]))
-            stdDevTotalTokensInWallets.append(np.std(tT_[j]))
+            avgTotalTokensInWallet, stdDevTotalTokensInWallet = meanAndStd(tT_[j])
+            avgTotalTokensInWallets.append(avgTotalTokensInWallet)
+            stdDevTotalTokensInWallets.append(stdDevTotalTokensInWallet)
 
             #avgPaymentTokenCounts.append(np.mean(tP_[j]))
             #stdDevPaymentTokenCounts.append(np.std(tP_[j]))
@@ -88,8 +104,11 @@ if __name__ == "__main__":
                 avgPaymentTokenCount[j].append(ptc)
 
         for j in np.arange(stepSize):
-            avgPaymentTokenCounts.append(np.mean(avgPaymentTokenCount[j]))
-            stdDevPaymentTokenCounts.append(np.std(avgPaymentTokenCount[j]))
+            avgPaymentTokenCountValue, stdDevPaymentTokenCountValue = meanAndStd(
+                avgPaymentTokenCount[j]
+            )
+            avgPaymentTokenCounts.append(avgPaymentTokenCountValue)
+            stdDevPaymentTokenCounts.append(stdDevPaymentTokenCountValue)
 
     print("Average Payment Token Counts: ", avgPaymentTokenCounts)
     print(len(avgPaymentTokenCounts), " average payment token counts")
@@ -98,20 +117,10 @@ if __name__ == "__main__":
 
         # Load the token values for each simulation
         tokenValues = np.genfromtxt(dataPath + "token_values_" + str(simIndex) + ".dat", dtype=float)
-        
-        tokenValues = tokenValues.tolist()
-        #print(tokenValues)
-        
-        # Check if the tokenValues is
-        # Append the token values to the allTokenValues list
-        # check if tokenValues is a list or a single value
-        if isinstance(tokenValues, list):
-            for t in tokenValues:
-                allTokenValues.append(t)
-        else:
-            allTokenValues.append(tokenValues)
+
+        extendWithValues(allTokenValues, tokenValues)
     maxTokens = np.genfromtxt(savePath + "total_max_token_vals.dat", dtype=float)
-    allTokenValues.extend(maxTokens.tolist())
+    extendWithValues(allTokenValues, maxTokens)
 
     np.savetxt(savePath + "all_token_values.dat", allTokenValues)
     # histrogram of all token values crosscheck

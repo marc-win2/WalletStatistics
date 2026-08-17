@@ -1,3 +1,35 @@
-Data/*
-*.pyc
-Simulations/*
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*~
+
+# Generated simulation output
+/Data/
+/DataGlobal/
+/DemoData/
+/DemoDataGlobal/
+/Simulations/
+/Comparison_Refund_LargeInitialFund/
+/Comparison_Refund_LargeInitialFund.zip
