@@ -8,12 +8,23 @@ from coinselection import BoltzmannDistribution, CoinSelectionDistribution
 from wallet import Token
 
 
-def make_distribution(beta=0.1, mode="canonical"):
+def make_distribution(beta=0.1, mode="canonical", seed=None):
     with contextlib.redirect_stdout(io.StringIO()):
-        return CoinSelectionDistribution(beta, [1, 10, 100], mode)
+        return CoinSelectionDistribution(beta, [1, 10, 100], mode, seed=seed)
 
 
 class CoinSelectionTests(unittest.TestCase):
+    def test_seed_reproduces_continuous_distribution_draws(self):
+        first = make_distribution(seed=12)
+        second = make_distribution(seed=12)
+
+        firstDraws = [first.pickValueFromContinuousDistribution() for _ in range(4)]
+        secondDraws = [
+            second.pickValueFromContinuousDistribution() for _ in range(4)
+        ]
+
+        np.testing.assert_allclose(firstDraws, secondDraws)
+
     def test_boltzmann_distribution_uses_energy_beta_and_mu(self):
         self.assertAlmostEqual(
             BoltzmannDistribution(3.0, 0.5, mu=1.0),

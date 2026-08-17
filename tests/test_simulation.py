@@ -38,6 +38,25 @@ class SimulationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_simulation(betaAdjustmentMode="unknown")
 
+    def test_seed_reproduces_independent_internal_random_streams(self):
+        first = make_simulation(seed=42)
+        second = make_simulation(seed=42)
+
+        firstTokenSelectionDraws = first.ownrng.random(4)
+        secondTokenSelectionDraws = second.ownrng.random(4)
+        firstCoinSelectionDraws = first.coinSelectionDistr.rng.random(4)
+        secondCoinSelectionDraws = second.coinSelectionDistr.rng.random(4)
+
+        self.assertTrue(
+            (firstTokenSelectionDraws == secondTokenSelectionDraws).all()
+        )
+        self.assertTrue(
+            (firstCoinSelectionDraws == secondCoinSelectionDraws).all()
+        )
+        self.assertFalse(
+            (firstTokenSelectionDraws == firstCoinSelectionDraws).all()
+        )
+
     def test_all_beta_adjustment_formulas(self):
         simulation = make_simulation()
         set_wallet(simulation, [1.0, 2.0, 3.0])

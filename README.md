@@ -103,6 +103,18 @@ by 10 because the Dirichlet workload generates payments in groups of ten:
 python3 main.py --num_iter 100000
 ```
 
+Runs are nondeterministic by default, as before. To reproduce a complete
+experiment matrix, provide one non-negative root seed:
+
+```bash
+python3 main.py --num_iter 100000 --seed 12345
+```
+
+The root seed is deterministically split into independent random streams for
+transaction generation and token selection. For a given scenario and run
+index, all beta-adjustment modes receive identical input transactions while
+retaining independent coin-selection randomness.
+
 Large iteration counts are computationally expensive. Results are written below
 `Simulations/BetaAdjustmentMatrix/`, with a separate directory for each of the
 six configurations.

@@ -25,6 +25,7 @@ class SimulationHandler:
         useBucketsForProbabilityComp=False,
         mode="canonical",
         betaAdjustmentMode="legacy",
+        seed=None,
     ):
         self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
         ### for transaction handling
@@ -51,7 +52,15 @@ class SimulationHandler:
 
         self.__globalTokenIndex = 0 # used to assign unique serial numbers to tokens!!!! Pay attention when changing this 
 
-        self.ownrng = initializeRandomNumGenerator()
+        if seed is None:
+            tokenSelectionSeed = None
+            coinSelectionSeed = None
+        else:
+            tokenSelectionSeed, coinSelectionSeed = np.random.SeedSequence(
+                seed
+            ).spawn(2)
+        self.randomSeed = seed
+        self.ownrng = initializeRandomNumGenerator(tokenSelectionSeed)
 
 
         if drawDepositToken:
@@ -62,7 +71,12 @@ class SimulationHandler:
         self.betaApproximationFactor = 10.0
         self.tokenNoPerBucket = [0] * len(self.tokenBuckets) # This is a list of the number of tokens in each bucket, initialized to zero
         self.highThroughputWallet = Wallet()
-        self.coinSelectionDistr = CoinSelectionDistribution(beta=beta, tokenDenominationBuckets=tokenDenominationBuckets, distMode=mode) # Initialize the coin selection distribution with the given beta and token denomination buckets
+        self.coinSelectionDistr = CoinSelectionDistribution(
+            beta=beta,
+            tokenDenominationBuckets=tokenDenominationBuckets,
+            distMode=mode,
+            seed=coinSelectionSeed,
+        )  # Initialize the coin selection distribution with the given beta and token denomination buckets
         
         
         self.initiateWallet()  # Initialize the wallet with a set of tokens
@@ -430,7 +444,9 @@ class SimulationHandler:
                     print("Wallet is empty, cannot proceed with payment.")
                     raise ValueError("Wallet is empty, cannot proceed with payment.")
                 else:
-                    selectRandom = self.highThroughputWallet.selectTokenRandomly()
+                    selectRandom = self.highThroughputWallet.selectTokenRandomly(
+                        rng=self.ownrng if self.randomSeed is not None else None
+                    )
                     selectedToken = selectRandom
                     selectTokenIndex = selectRandom.sno 
             selectedWallet.addToken(selectedToken)

@@ -19,13 +19,19 @@ class CoinSelectionDistribution:
     """
     Class to handle coin selection distribution calculations.
     """
-    def __init__(self, beta, tokenDenominationBuckets, distMode="canonical"):
+    def __init__(
+        self,
+        beta,
+        tokenDenominationBuckets,
+        distMode="canonical",
+        seed=None,
+    ):
         self.beta = beta  # Inverse temperature. should be reabsorbed into the real number generation until return value is computed
         self.tBucketBounds = tokenDenominationBuckets
         self.mode = distMode # can be "grandcanonical" or "canonical", or "uniform"
         self.warnaboutZeroProbabilities = False  # Flag to warn about zero probabilities
         self.muArray = []
-        self.rng = initializeRandomNumGenerator()
+        self.rng = initializeRandomNumGenerator(seed)
 
         if self.mode == "grandcanonical":
             self.setGrandCanonicalArray()

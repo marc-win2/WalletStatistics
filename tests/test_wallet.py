@@ -30,6 +30,15 @@ class WalletTests(unittest.TestCase):
         with patch("wallet.np.random.choice", return_value=tokens[1]):
             self.assertIs(wallet.selectTokenRandomly(), tokens[1])
 
+    def test_random_selection_uses_supplied_generator(self):
+        tokens = [Token(1.00, 1), Token(2.00, 2)]
+        wallet = Wallet(tokens)
+        generator = unittest.mock.Mock()
+        generator.choice.return_value = tokens[0]
+
+        self.assertIs(wallet.selectTokenRandomly(rng=generator), tokens[0])
+        generator.choice.assert_called_once_with(tokens)
+
 
 if __name__ == "__main__":
     unittest.main()

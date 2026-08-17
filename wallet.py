@@ -58,12 +58,14 @@ class Wallet:
                 return token
         return None
     
-    def selectTokenRandomly(self):
+    def selectTokenRandomly(self, rng=None):
         """
-        Select a token randomly from the wallet.
+        Select a token randomly, optionally using a supplied generator.
         """
         if not self.tokens:
             return None
+        if rng is not None:
+            return rng.choice(self.tokens)
         return np.random.choice(self.tokens)
     
     def removeTokenBySno(self, serialno):

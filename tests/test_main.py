@@ -9,10 +9,16 @@ import main
 
 class MainTests(unittest.TestCase):
     def test_cli_defaults_to_one_hundred_payments(self):
-        self.assertEqual(main.parseCommandLineArguments([]).num_iter, 100)
+        defaultArguments = main.parseCommandLineArguments([])
+        self.assertEqual(defaultArguments.num_iter, 100)
+        self.assertIsNone(defaultArguments.seed)
         self.assertEqual(
             main.parseCommandLineArguments(["--num_iter", "250"]).num_iter,
             250,
+        )
+        self.assertEqual(
+            main.parseCommandLineArguments(["--seed", "12345"]).seed,
+            12345,
         )
 
     def test_cli_rejects_invalid_payment_counts(self):
@@ -20,6 +26,40 @@ class MainTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(argparse.ArgumentTypeError):
                     main.paymentIterationCount(value)
+
+    def test_cli_rejects_negative_seed(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            main.randomSeed("-1")
+
+    def test_run_seeds_pair_transactions_across_beta_modes(self):
+        legacySeeds = main.deriveRunSeeds(123, "gaussian", "legacy", 4)
+        exactSeeds = main.deriveRunSeeds(
+            123,
+            "gaussian",
+            "microcanonicalExact",
+            4,
+        )
+
+        self.assertEqual(legacySeeds[0], exactSeeds[0])
+        self.assertNotEqual(legacySeeds[1], exactSeeds[1])
+        self.assertEqual(
+            legacySeeds,
+            main.deriveRunSeeds(123, "gaussian", "legacy", 4),
+        )
+        self.assertNotEqual(
+            legacySeeds,
+            main.deriveRunSeeds(123, "gaussian", "legacy", 5),
+        )
+        self.assertEqual(
+            main.deriveRunSeeds(None, "gaussian", "legacy", 4),
+            (None, None),
+        )
+
+    def test_seed_derivation_rejects_unknown_configuration(self):
+        with self.assertRaisesRegex(ValueError, "Invalid transaction scenario"):
+            main.deriveRunSeeds(123, "unknown", "legacy", 0)
+        with self.assertRaisesRegex(ValueError, "Invalid beta adjustment mode"):
+            main.deriveRunSeeds(123, "gaussian", "unknown", 0)
 
     def test_experiment_matrix_has_every_scenario_and_beta_mode(self):
         configurations = main.getBetaAdjustmentExperimentConfigurations()
@@ -85,6 +125,7 @@ class MainTests(unittest.TestCase):
             noPayments=100,
             xFactor=3,
             dataDirectory="Data",
+            seed=None,
         )
 
 

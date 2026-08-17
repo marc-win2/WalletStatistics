@@ -9,6 +9,49 @@ from wallet import Token, Wallet
 from simulation import SimulationHandler
 
 
+TRANSACTION_SCENARIO_SEED_IDS = {
+    'gaussian': 0,
+    'dirichletFloat': 1,
+}
+BETA_ADJUSTMENT_SEED_IDS = {
+    'legacy': 0,
+    'microcanonicalExact': 1,
+    'microcanonicalApprox': 2,
+}
+
+
+def deriveSeed(rootSeed, *streamCoordinates):
+    """Derive a stable independent integer seed from a root seed."""
+    if rootSeed is None:
+        return None
+    seedSequence = np.random.SeedSequence([rootSeed, *streamCoordinates])
+    return int(seedSequence.generate_state(1, dtype=np.uint64)[0])
+
+
+def deriveRunSeeds(rootSeed, transactionScenario, betaAdjustmentMode, runIndex):
+    """Derive workload and simulation seeds for one experiment run."""
+    if rootSeed is None:
+        return None, None
+    if transactionScenario not in TRANSACTION_SCENARIO_SEED_IDS:
+        raise ValueError(
+            "Invalid transaction scenario. Choose from gaussian or "
+            "dirichletFloat."
+        )
+    if betaAdjustmentMode not in BETA_ADJUSTMENT_SEED_IDS:
+        raise ValueError(
+            "Invalid beta adjustment mode. Choose from legacy, "
+            "microcanonicalExact, or microcanonicalApprox."
+        )
+    scenarioId = TRANSACTION_SCENARIO_SEED_IDS[transactionScenario]
+    betaModeId = BETA_ADJUSTMENT_SEED_IDS[betaAdjustmentMode]
+
+    # Excluding betaModeId keeps each scenario's input transactions identical
+    # across beta modes, while coin-selection randomness remains independent.
+    transactionSeed = deriveSeed(rootSeed, 0, scenarioId, runIndex)
+    simulationSeed = deriveSeed(rootSeed, 1, scenarioId, betaModeId, runIndex)
+    return transactionSeed, simulationSeed
+
+
 def plottingTransactionsTest():
     transactionGenerator = RandomTransactionGenerator()
     
@@ -187,6 +230,7 @@ def singleSimulation(
     mode="canonical",
     betaAdjustmentMode="legacy",
     dataDirectory='Data',
+    seed=None,
 ):
     simulation = SimulationHandler(
         tokenDenominationBuckets=tokenDenominationBuckets,
@@ -197,6 +241,7 @@ def singleSimulation(
         useBucketsForProbabilityComp=useBuckets,
         mode=mode,
         betaAdjustmentMode=betaAdjustmentMode,
+        seed=seed,
     )
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -247,8 +292,9 @@ def generateDoubleGaussianTransactionsAndPlotThem(
     noPayments=100000,
     xFactor=3,
     dataDirectory='Data',
+    seed=None,
 ):
-    transactionGenerator = RandomTransactionGenerator()
+    transactionGenerator = RandomTransactionGenerator(seed=seed)
     transactionGenerator.maxAbsTransactionValue = 10**7### maximal, absolute transaction value
      # signature of generateNTransactionsGaussian(n, stdDev, mean), transactions can in principle be 
      # negative and positive, corresponding to deposits and withdrawals
@@ -297,12 +343,13 @@ def generateTransactions_PaymentsDirichlet_AndPlotThem(
     xFactor=10,
     generateDirichletAsFloats=True,
     dataDirectory='Data',
+    seed=None,
 ):
 
     print("Generating Dirichlet Payments and constant deposits")
     deposits = [2000] * noDeposits
     payments = []
-    transactionGenerator = RandomTransactionGenerator()
+    transactionGenerator = RandomTransactionGenerator(seed=seed)
     for i in range(noDeposits):
         if generateDirichletAsFloats:
             generateXPayments = transactionGenerator.generateTransactionDirichlet(1.0,sumValue=2000, sizealpha=xFactor)
@@ -444,6 +491,7 @@ def generateTransactionScenario(
     simulationIndex,
     noPayments,
     dataDirectory='Data',
+    seed=None,
 ):
     """Generate one of the two workloads used by the experiment matrix."""
     if transactionScenario == 'gaussian':
@@ -452,6 +500,7 @@ def generateTransactionScenario(
             noPayments=noPayments,
             xFactor=3,
             dataDirectory=dataDirectory,
+            seed=seed,
         )
 
     if transactionScenario == 'dirichletFloat':
@@ -466,6 +515,7 @@ def generateTransactionScenario(
             xFactor=paymentsPerDeposit,
             generateDirichletAsFloats=True,
             dataDirectory=dataDirectory,
+            seed=seed,
         )
 
     raise ValueError(
@@ -480,6 +530,7 @@ def runSimulationBatch(
     betaAdjustmentMode='legacy',
     noPayments=100000,
     dataDirectory='Data',
+    seed=None,
 ):
     """Run the configured simulation batch and collect final-state summaries."""
     totalValues = []
@@ -489,11 +540,18 @@ def runSimulationBatch(
     paymentTokenCountStddevs = []
 
     for simulationIndex in range(numSimulations):
+        transactionSeed, simulationSeed = deriveRunSeeds(
+            seed,
+            transactionScenario,
+            betaAdjustmentMode,
+            simulationIndex,
+        )
         transactions, deposits, payments = generateTransactionScenario(
             transactionScenario,
             simulationIndex,
             noPayments,
             dataDirectory=dataDirectory,
+            seed=transactionSeed,
         )
         tokenValues, maxTokenValue, totalValue, totalTokensInWallet, tokenCountPerTransaction, tokenCountHistory, totalValueHistory = singleSimulation(
             transactions,
@@ -506,6 +564,7 @@ def runSimulationBatch(
             mode="canonical",
             betaAdjustmentMode=betaAdjustmentMode,
             dataDirectory=dataDirectory,
+            seed=simulationSeed,
         )
 
         paymentTokenCounts = getPaymentTokenCounts(
@@ -697,6 +756,7 @@ def runStandaloneSimulationExperiment(
     noPayments=100000,
     transactionScenario='gaussian',
     betaAdjustmentMode='legacy',
+    seed=None,
 ):
     """Run one complete scenario using the former standalone output layout."""
     prepareOutputDirectories(dataDirectory, globalDataDirectory)
@@ -707,6 +767,7 @@ def runStandaloneSimulationExperiment(
         betaAdjustmentMode=betaAdjustmentMode,
         noPayments=noPayments,
         dataDirectory=dataDirectory,
+        seed=seed,
     )
     saveAggregateHistograms(dataDirectory, globalDataDirectory)
     saveGlobalSimulationSummaries(
@@ -723,6 +784,7 @@ def runBetaAdjustmentExperiment(
     tokenDenominationBuckets,
     numSimulations=100,
     noPayments=100000,
+    seed=None,
 ):
     """Run one workload/beta combination in its own output directory."""
     experimentDirectory = os.path.join(
@@ -746,6 +808,7 @@ def runBetaAdjustmentExperiment(
         noPayments=noPayments,
         transactionScenario=configuration['transactionScenario'],
         betaAdjustmentMode=configuration['betaAdjustmentMode'],
+        seed=seed,
     )
     return experimentDirectory
 
@@ -755,6 +818,7 @@ def runBetaAdjustmentExperimentMatrix(
     outputRoot='Simulations/BetaAdjustmentMatrix',
     numSimulations=100,
     noPayments=100000,
+    seed=None,
 ):
     """Run all six workload/beta combinations in isolated directories."""
     os.makedirs(outputRoot, exist_ok=True)
@@ -767,6 +831,7 @@ def runBetaAdjustmentExperimentMatrix(
                 tokenDenominationBuckets,
                 numSimulations=numSimulations,
                 noPayments=noPayments,
+                seed=seed,
             )
         )
     return experimentDirectories
@@ -784,6 +849,14 @@ def paymentIterationCount(value):
     return numberOfPayments
 
 
+def randomSeed(value):
+    """Validate a non-negative random seed supplied on the command line."""
+    seed = int(value)
+    if seed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return seed
+
+
 def parseCommandLineArguments(arguments=None):
     """Parse command-line options for the experiment matrix."""
     parser = argparse.ArgumentParser(
@@ -794,6 +867,12 @@ def parseCommandLineArguments(arguments=None):
         type=paymentIterationCount,
         default=100,
         help="number of payments per simulation run (default: 100)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=randomSeed,
+        default=None,
+        help="optional root seed for reproducible simulations (default: random)",
     )
     return parser.parse_args(arguments)
 
@@ -831,6 +910,7 @@ def main(arguments=None):
         outputRoot='Simulations/BetaAdjustmentMatrix',
         numSimulations=100,
         noPayments=commandLineArguments.num_iter,
+        seed=commandLineArguments.seed,
     )
 
 
