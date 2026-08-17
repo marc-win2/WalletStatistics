@@ -145,12 +145,12 @@ class RandomTransactionGenerator:
         plt.show()
         return transactions
     
-    def generateIntegerDirichletPaymentsViaMultinomial(self, n, sum):
+    def generateIntegerDirichletPaymentsViaMultinomial(self, n, sum=2000):
         """
         Generate a Dirichlet distributed integer vector of size n with sum = sum using multinomial distribution.
         """
         dirichletProbs = self.rng.dirichlet([1.0]*n)
         print("Dirichlet probabilities:", dirichletProbs  )
-        integers = self.rng.multinomial(2000, dirichletProbs)
+        integers = self.rng.multinomial(sum, dirichletProbs)
         print(np.sum(integers))
         return integers

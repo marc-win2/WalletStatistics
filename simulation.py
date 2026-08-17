@@ -43,7 +43,7 @@ class SimulationHandler:
 
         self.currentTransactionIndex = 0
         self.transactionSetSize = len(self.transactionSet)
-        self.tokenCountInvolvedInTransaction = [None] * self.transactionSetSize # used to store the number of tokens involved in each transaction
+        self.tokenCountInvolvedInTransaction = [None] * self.transactionSetSize # includes selected inputs and any generated change token for payments
         self.totalValueHistory = [None] * self.transactionSetSize # used to store the total value of the wallet after each transaction
         self.tokenCountHistory = [None] * self.transactionSetSize # used to store the number of tokens in the wallet after each transaction
         self.saveBetaHistory = [None] * self.transactionSetSize# used to store the beta value after each transaction
@@ -70,8 +70,8 @@ class SimulationHandler:
         self.timeCounter = 0 ## used for tracking special cases in the simulation, see self.handleNextTransaction()
 
         if self.coinSelectionDistr.mode == "grandcanonical":
-            print("Warning: CoinSelectionDistribution is in grandcanonical mode, this is not tested very well.")
-            print("Currently mu is by defualt set to 0.0")
+            print("Warning: CoinSelectionDistribution is in grandcanonical mode, this is experimental.")
+            print("Currently mu is by default set to 0.0")
     
     def simulateCurrentTransactionSet(self):
         """
@@ -392,6 +392,8 @@ class SimulationHandler:
         """
         Handle a payment transaction by selecting tokens from the wallet.
         paymentValue should be negative, representing the amount to be paid.
+        The returned wallet contains selected input tokens and, when necessary,
+        the generated change token.
         """
         paymentValue = roundToMinimumDenomination(paymentValue)
 

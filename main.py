@@ -20,11 +20,6 @@ def plottingTransactionsTest():
     transactions = transactionGenerator.plotGaussianWithUniformOutliersTransactionTestOne(10**5)
     print(transactions.mean(), transactions.std())
 
-def coinSelectionDistributionTest():
-    coinDistrTest = CoinSelectionDistribution(1e-02, tokenDenominationBuckets)
-    #coinDistrTest.setCanonical()
-    print("coinDistr.muArray = ", coinDistrTest.betaMuArray)
-    print("coinDistr.expectedTokenNoPerBucket = ", coinDistrTest.expn)
 
 def simulationTest(tokenDenominationBuckers,  transactions):
     simulate = SimulationHandler(tokenDenominationBuckets, 1e-03, drawDepositToken=False)

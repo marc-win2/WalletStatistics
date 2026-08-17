@@ -1,4 +1,7 @@
 # Created by Marc Winstel on July 25, 2025
+import argparse
+import os
+
 import numpy as np 
 import matplotlib.pyplot as plt 
 
@@ -17,16 +20,72 @@ def extendWithValues(destination, values):
         destination.append(convertedValues)
 
 
+def positiveInteger(value):
+    """Return a positive integer or raise a command-line validation error."""
+    integerValue = int(value)
+    if integerValue <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return integerValue
+
+
+def parseCommandLineArguments(arguments=None):
+    """Parse configuration for aggregating simulation output."""
+    parser = argparse.ArgumentParser(
+        description="Average and plot output from multiple simulation runs."
+    )
+    parser.add_argument(
+        "--num_runs",
+        "--num-runs",
+        dest="num_runs",
+        type=positiveInteger,
+        default=100,
+        help="number of simulation runs to aggregate (default: 100)",
+    )
+    parser.add_argument(
+        "--num_payments",
+        "--num-payments",
+        dest="num_payments",
+        type=positiveInteger,
+        default=100000,
+        help="number of payments per run (default: 100000)",
+    )
+    parser.add_argument(
+        "--chunk_size",
+        "--chunk-size",
+        dest="chunk_size",
+        type=positiveInteger,
+        default=20000,
+        help="rows processed at once from each run (default: 20000)",
+    )
+    parser.add_argument(
+        "--data_path",
+        "--data-path",
+        dest="data_path",
+        default="./Data",
+        help="directory containing per-run data (default: ./Data)",
+    )
+    parser.add_argument(
+        "--save_path",
+        "--save-path",
+        dest="save_path",
+        default="./DataGlobal",
+        help="directory for aggregate output (default: ./DataGlobal)",
+    )
+    return parser.parse_args(arguments)
+
+
 
 
 if __name__ == "__main__":
-    numSimulations = 100
+    commandLineArguments = parseCommandLineArguments()
+    numSimulations = commandLineArguments.num_runs
 
-    addPrefix = "."# "./Simulations/Gaussian_Boltzmannadjustbeta_normalrefund" #"Dirichlet_BoltzmannBetaadjusted_noinitialfunding1"#"Dirichtlet_canonicaladjustbeta_run1"
-    dataPath = addPrefix + "/Data/"
-    savePath = addPrefix + "/DataGlobal/"
+    dataPath = commandLineArguments.data_path
+    savePath = commandLineArguments.save_path
 
-    transActionNumber = np.loadtxt(dataPath + "transaction0.dat")
+    transActionNumber = np.atleast_1d(
+        np.loadtxt(os.path.join(dataPath, "transaction0.dat"))
+    )
     noTransactions = len(transActionNumber)
     print("Number of transactions in the simulation: ", noTransactions)
 
@@ -39,35 +98,26 @@ if __name__ == "__main__":
 
     allTokenValues = []
 
-    stepSize = 20000
-    # Initialize arrays to hold the data for each simulation    
+    stepSize = commandLineArguments.chunk_size
+    # Chunking bounds memory use by loading only one slice from each run at once.
     for transIndex in np.arange(0,noTransactions, stepSize):
         print("Processing transaction index: ", transIndex)
-        avgTotalValue = []*stepSize
-        
-        avgTotalTokensInWallet = []*stepSize
-
-        #avgPaymentTokenCount = []*stepSize
-
-        tv_ = [[] for _ in range(stepSize)]
-        tT_ = [[] for _ in range(stepSize)]
-        #tP_ = [[] for _ in range(stepSize // 4)]
+        currentStepSize = min(stepSize, noTransactions - int(transIndex))
+        tv_ = [[] for _ in range(currentStepSize)]
+        tT_ = [[] for _ in range(currentStepSize)]
 
         for simIndex in np.arange(numSimulations):
             # Load the data for each simulation
-            totalValue = np.genfromtxt(dataPath + "WalletValue_" + str(simIndex) + ".dat", dtype=float, skip_header=transIndex, max_rows=stepSize)
-            totalTokensInWallet = np.genfromtxt(dataPath + "TokenCount_" + str(simIndex) + ".dat", dtype=float, skip_header=transIndex, max_rows=stepSize)
-            #paymentTokenCount = np.genfromtxt(dataPath + "payment_token_count_" + str(simIndex) + ".dat", dtype=float, skip_header=transIndex, max_rows=stepSize)
-            #print("Total Value: ", totalValue   )
+            totalValue = np.atleast_2d(np.genfromtxt(os.path.join(dataPath, "WalletValue_" + str(simIndex) + ".dat"), dtype=float, skip_header=transIndex, max_rows=currentStepSize))
+            totalTokensInWallet = np.atleast_2d(np.genfromtxt(os.path.join(dataPath, "TokenCount_" + str(simIndex) + ".dat"), dtype=float, skip_header=transIndex, max_rows=currentStepSize))
 
             # Store the values to average over all simulations
             for j, tv in enumerate(totalValue):
                 tv_[j].append(totalValue[j][1])
                 tT_[j].append(totalTokensInWallet[j][1])
-                #tP_[j].append(paymentTokenCount[j])
 
 
-        for j in np.arange(stepSize):
+        for j in np.arange(currentStepSize):
             avgTotalValue, stdDevTotalValue = meanAndStd(tv_[j])
             avgTotalValues.append(avgTotalValue)
             stdDevTotalValues.append(stdDevTotalValue)
@@ -76,75 +126,72 @@ if __name__ == "__main__":
             avgTotalTokensInWallets.append(avgTotalTokensInWallet)
             stdDevTotalTokensInWallets.append(stdDevTotalTokensInWallet)
 
-            #avgPaymentTokenCounts.append(np.mean(tP_[j]))
-            #stdDevPaymentTokenCounts.append(np.std(tP_[j]))
     
     totalValue= 0
     totalTokensInWallet = 0
     tv_ = 0
     tT_ = 0
 
-    noPayments = 100000
+    noPayments = commandLineArguments.num_payments
     print(noPayments, " payments in the simulation")
 
     avgPaymentTokenCounts = []
     stdDevPaymentTokenCounts = []
 
     for payIndex in np.arange(0, noPayments, stepSize):
-        avgPaymentTokenCount = [[] for _ in range(stepSize)]
-        stdDevPaymentTokenCount = [[] for _ in range(stepSize)]
+        currentStepSize = min(stepSize, noPayments - int(payIndex))
+        avgPaymentTokenCount = [[] for _ in range(currentStepSize)]
         print("Processing payment index: ", payIndex)
 
         for simIndex in np.arange(numSimulations):
             # Load the payment token count for each simulation
-            paymentTokenCount = np.genfromtxt(dataPath + "payment_token_count_" + str(simIndex) + ".dat", dtype=float, skip_header=payIndex, max_rows=stepSize)
+            paymentTokenCount = np.atleast_1d(np.genfromtxt(os.path.join(dataPath, "payment_token_count_" + str(simIndex) + ".dat"), dtype=float, skip_header=payIndex, max_rows=currentStepSize))
 
             # Store the values to average over all simulations
             for j, ptc in enumerate(paymentTokenCount):
                 avgPaymentTokenCount[j].append(ptc)
 
-        for j in np.arange(stepSize):
+        for j in np.arange(currentStepSize):
             avgPaymentTokenCountValue, stdDevPaymentTokenCountValue = meanAndStd(
                 avgPaymentTokenCount[j]
             )
             avgPaymentTokenCounts.append(avgPaymentTokenCountValue)
             stdDevPaymentTokenCounts.append(stdDevPaymentTokenCountValue)
 
-    print("Average Payment Token Counts: ", avgPaymentTokenCounts)
     print(len(avgPaymentTokenCounts), " average payment token counts")
 
     for simIndex in np.arange(numSimulations):
 
         # Load the token values for each simulation
-        tokenValues = np.genfromtxt(dataPath + "token_values_" + str(simIndex) + ".dat", dtype=float)
+        tokenValues = np.genfromtxt(os.path.join(dataPath, "token_values_" + str(simIndex) + ".dat"), dtype=float)
 
         extendWithValues(allTokenValues, tokenValues)
-    maxTokens = np.genfromtxt(savePath + "total_max_token_vals.dat", dtype=float)
+    maxTokens = np.genfromtxt(os.path.join(savePath, "total_max_token_vals.dat"), dtype=float)
     extendWithValues(allTokenValues, maxTokens)
 
-    np.savetxt(savePath + "all_token_values.dat", allTokenValues)
+    np.savetxt(os.path.join(savePath, "all_token_values.dat"), allTokenValues)
     # histrogram of all token values crosscheck
     plt.hist(allTokenValues, bins=200, density=False, alpha=0.7, label='All Token Values')
     plt.xlabel('Token Value')
     plt.ylabel('Frequency')
     plt.title('Histogram of All Token Values')
-    plt.savefig(savePath + "histogram_all_token_values_crosscheck.png")
+    plt.savefig(os.path.join(savePath, "histogram_all_token_values_crosscheck.png"))
     plt.clf()  # Clear the current figure for the next plot
 
     zoomedTokenValues = [val for val in allTokenValues if val < 5000]
     plt.hist(zoomedTokenValues, bins=200, density=False, alpha=0.7, label='All Token Values')
     plt.xlabel('Token Value')
-    plt.savefig(savePath + "histogram_token_values_crosscheck_zoomed.png")
+    plt.savefig(os.path.join(savePath, "histogram_token_values_crosscheck_zoomed.png"))
     plt.clf()  # Clear the current figure for the next plot
 
-    np.savetxt(savePath + "avg_total_values.dat", avgTotalValues)
-    np.savetxt(savePath + "std_dev_total_values.dat", stdDevTotalValues)
+    np.savetxt(os.path.join(savePath, "avg_total_values.dat"), avgTotalValues)
+    np.savetxt(os.path.join(savePath, "std_dev_total_values.dat"), stdDevTotalValues)
 
-    np.savetxt(savePath + "avg_total_tokens_in_wallets.dat", avgTotalTokensInWallets)
-    np.savetxt(savePath + "std_dev_total_tokens_in_wallets.dat", stdDevTotalTokensInWallets)
+    np.savetxt(os.path.join(savePath, "avg_total_tokens_in_wallets.dat"), avgTotalTokensInWallets)
+    np.savetxt(os.path.join(savePath, "std_dev_total_tokens_in_wallets.dat"), stdDevTotalTokensInWallets)
 
-    np.savetxt(savePath + "avg_payment_token_counts.dat", avgPaymentTokenCounts)
-    np.savetxt(savePath + "std_dev_payment_token_counts.dat", stdDevPaymentTokenCounts)
+    np.savetxt(os.path.join(savePath, "avg_payment_token_counts.dat"), avgPaymentTokenCounts)
+    np.savetxt(os.path.join(savePath, "std_dev_payment_token_counts.dat"), stdDevPaymentTokenCounts)
 
 
     # Plot the average total values
@@ -152,7 +199,7 @@ if __name__ == "__main__":
     plt.xlabel('Transaction Index')
     plt.ylabel('Average Total Value')
     plt.title('Average Total Values Over Transactions')
-    plt.savefig(savePath + "avg_total_values_over_transactions.png")
+    plt.savefig(os.path.join(savePath, "avg_total_values_over_transactions.png"))
     plt.clf()  # Clear the current figure for the next plot
 
     # Plot the average total tokens in wallets
@@ -160,7 +207,7 @@ if __name__ == "__main__":
     plt.xlabel('Transaction Index')
     plt.ylabel('Average Total Tokens in Wallets')
     plt.title('Average Total Tokens in Wallets Over Transactions')
-    plt.savefig(savePath + "avg_total_tokens_in_wallets_over_transactions.png")
+    plt.savefig(os.path.join(savePath, "avg_total_tokens_in_wallets_over_transactions.png"))
     plt.clf()  # Clear the current figure for the next plot
 
     # Plot the average payment token counts
@@ -168,5 +215,5 @@ if __name__ == "__main__":
     plt.xlabel('Transaction Index')
     plt.ylabel('Average Payment Token Count')
     plt.title('Average Payment Token Counts Over Transactions')
-    plt.savefig(savePath + "avg_payment_token_counts_over_transactions.png")
+    plt.savefig(os.path.join(savePath, "avg_payment_token_counts_over_transactions.png"))
     plt.clf()  # Clear the current figure for the next plot

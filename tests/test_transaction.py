@@ -60,6 +60,17 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(len(values), 10)
         self.assertEqual(int(np.sum(values)), 2000)
 
+    def test_multinomial_generator_honors_custom_total(self):
+        generator = RandomTransactionGenerator(seed=10)
+        with contextlib.redirect_stdout(io.StringIO()):
+            values = generator.generateIntegerDirichletPaymentsViaMultinomial(
+                n=5,
+                sum=37,
+            )
+
+        self.assertEqual(len(values), 5)
+        self.assertEqual(int(np.sum(values)), 37)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -55,7 +55,7 @@ class SimulationTests(unittest.TestCase):
         simulation.betaApproximationFactor = 1000.0
         self.assertAlmostEqual(simulation.adjustBetaMicroApprox(), expectedExact)
 
-    def test_payment_removes_value_and_returns_change(self):
+    def test_payment_result_counts_selected_input_and_change_token(self):
         simulation = make_simulation()
         set_wallet(simulation, [100.0])
 

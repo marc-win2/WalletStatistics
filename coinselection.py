@@ -27,20 +27,18 @@ class CoinSelectionDistribution:
         self.muArray = []
         self.rng = initializeRandomNumGenerator()
 
-        self.preComputedProbabilities = [0.0]* len(self.tBucketBounds)  # Precomputed probabilities for each bucket bound  
-        for i, bound in enumerate(self.tBucketBounds):
-            self.preComputedProbabilities[i] = self.compProbabilityForBucket(i) # precompute the probabilities for the bucket bounds, where the upper bound is used to compute the probability for the bucket
-
-        print(self.preComputedProbabilities)
-
-
         if self.mode == "grandcanonical":
-            self.setGrandCanonical()
-
+            self.setGrandCanonicalArray()
         if self.mode == "canonical":
             self.setCanonical()
         if self.mode == "uniform":
             self.setUniform()
+
+        self.preComputedProbabilities = [0.0]* len(self.tBucketBounds)  # Precomputed probabilities for each bucket bound
+        for i, bound in enumerate(self.tBucketBounds):
+            self.preComputedProbabilities[i] = self.compProbabilityForBucket(i) # precompute the probabilities for the bucket bounds, where the upper bound is used to compute the probability for the bucket
+
+        print(self.preComputedProbabilities)
         
     def returnBucketProbabilitiesForFixedWalletState(self, tokenNoPerBucket):
         """
@@ -74,7 +72,7 @@ class CoinSelectionDistribution:
         sum = 0.0
         
         for i, token in enumerate(tokenSet):
-            val = token.value()
+            val = token.value
             sum += self.compProbability(val)
         return sum 
     
@@ -108,7 +106,7 @@ class CoinSelectionDistribution:
                 print("Warning: denominator is zero.")
                 print("Warning: tokenSet is empty, returning empty distribution.")
                 print("    tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "transactionValue = ", transactionValue, "probs = ", probabilities, "intBoundsForUniformDrawing = ", intBoundsForUniformDrawing)
-                return [], [], tokenSet
+                return [], []
             else: 
                 if self.warnaboutZeroProbabilities:
                     print("Warning: denominator is zero.")
@@ -122,7 +120,7 @@ class CoinSelectionDistribution:
         if tokenSet == []:
             print("Warning: tokenSet is empty, returning empty distribution.")
             print("   tokenSet = ", tokenSet, "tokenSetInWallet = ", tokenSetInWallet, "transactionValue = ", transactionValue, "probs = ", probabilities, "intBoundsForUniformDrawing = ", intBoundsForUniformDrawing)
-            return [], [], tokenSet
+            return [], []
         
         probabilities = [p / denominator for p in probabilities]  # Normalize probabilities
                     
@@ -208,7 +206,7 @@ class CoinSelectionDistribution:
             print("Warning: beta is zero, grandcanonical mode, setting to 1.0.")
             self.beta = 1.0
 
-    def setGrandCanonical(self, muValueArray = None):
+    def setGrandCanonicalArray(self, muValueArray = None):
         """
         Set the mode to grandcanonical with a specific chemical potential array.
         """

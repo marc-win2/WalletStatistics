@@ -91,6 +91,11 @@ Each configuration contains per-run data and plots in `Data/` and aggregate
 summaries in `DataGlobal/`. The `.dat` files contain either one value per line or
 an index/value pair, depending on the recorded quantity.
 
+The `payment_token_count_*.dat` metric counts all tokens participating in the
+payment operation: selected input tokens plus the generated change token when a
+payment overdraws its inputs. It therefore may be one greater than the number of
+selected input tokens.
+
 ## Tests
 
 Run the unit test suite with:
@@ -101,6 +106,32 @@ python3 -m unittest discover -s tests -v
 
 The tests use temporary directories and do not create simulation data in the
 repository.
+
+## Aggregating simulation output
+
+`averageSimulationPlots.py` averages histories and final token values across
+simulation runs. By default it reads `./Data`, writes `./DataGlobal`, aggregates
+100 runs with 100,000 payments each, and processes histories in chunks of 20,000
+rows:
+
+```bash
+python3 averageSimulationPlots.py
+```
+
+All settings can be changed from the command line, for example:
+
+```bash
+python3 averageSimulationPlots.py \
+  --num_runs 10 \
+  --num_payments 1000 \
+  --chunk_size 500 \
+  --data_path Simulations/example/Data \
+  --save_path Simulations/example/DataGlobal
+```
+
+Chunking limits peak memory by reading and aggregating only part of every run's
+history at a time. It does not change the calculated means or standard
+deviations.
 
 ## Known limitation
 
