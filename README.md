@@ -143,18 +143,22 @@ python3 -m unittest discover -s tests -v
 The tests use temporary directories and do not create simulation data in the
 repository.
 
-## Aggregating simulation output
+## Analysis scripts
+
+### Aggregating simulation output
 
 `averageSimulationPlots.py` averages histories and final token values across
 simulation runs. By default it reads `./Data`, writes `./DataGlobal`, aggregates
 100 runs with 100,000 payments each, and processes histories in chunks of 20,000
-rows:
+rows. Chunking limits peak memory without changing the calculated means or
+standard deviations.
 
 ```bash
 python3 averageSimulationPlots.py
 ```
 
-All settings can be changed from the command line, for example:
+Paths, run counts, payment counts, and chunk size can be changed from the
+command line:
 
 ```bash
 python3 averageSimulationPlots.py \
@@ -165,9 +169,24 @@ python3 averageSimulationPlots.py \
   --save_path Simulations/example/DataGlobal
 ```
 
-Chunking limits peak memory by reading and aggregating only part of every run's
-history at a time. It does not change the calculated means or standard
-deviations.
+### Comparing beta-adjustment modes
+
+`compareBetaAdjustmentRuns.py` compares the three beta histories for selected
+run indices in both experiment-matrix scenarios. Each figure contains the beta
+trajectories and all pairwise absolute and relative deviations, while a CSV
+summarizes their mean, maximum, and root-mean-square differences.
+
+```bash
+python3 compareBetaAdjustmentRuns.py \
+  --matrix_path Simulations/BetaAdjustmentMatrix \
+  --runs $(seq 0 99) \
+  --fail_on_transaction_mismatch
+```
+
+The script checks that each paired run used identical transactions across beta
+modes; the strict flag aborts on a mismatch, while the default behavior marks
+the affected plot with a warning. Outputs are written to
+`MATRIX_PATH/BetaComparisons/` unless `--output_path` is supplied.
 
 ## Known limitation
 
