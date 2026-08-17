@@ -126,7 +126,11 @@ an index/value pair, depending on the recorded quantity.
 The `payment_token_count_*.dat` metric counts all tokens participating in the
 payment operation: selected input tokens plus the generated change token when a
 payment overdraws its inputs. It therefore may be one greater than the number of
-selected input tokens.
+selected input tokens. This differs from the convention used in the paper,
+which reports input tokens only. Consequently, both the data produced by this
+repository and the figures generated from it include one additional token for
+payments that create a change token. This difference must be taken into account
+when comparing repository output with the paper's figures.
 
 ## Tests
 
