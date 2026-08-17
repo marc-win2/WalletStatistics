@@ -202,7 +202,7 @@ class SimulationHandler:
 
 
 
-    def adjustBetaMicrocanonically(self):
+    def adjustBetaMicrocanonicalLegacy(self):
         if self.depositMode == "uniform":
             self.coinSelectionDistr.setBeta(0.0)
             if self.coinSelectionDistr.mode != "uniform":
@@ -273,7 +273,7 @@ class SimulationHandler:
     def adjustBetaDynamically(self):
         """Adjust beta using the configured beta adjustment mode."""
         if self.betaAdjustmentMode == "legacy":
-            return self.adjustBetaMicrocanonically()
+            return self.adjustBetaMicrocanonicalLegacy()
         if self.betaAdjustmentMode == "microcanonicalExact":
             return self.adjustBetaMicroExact()
         if self.betaAdjustmentMode == "microcanonicalApprox":

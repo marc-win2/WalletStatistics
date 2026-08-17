@@ -61,7 +61,7 @@ class SimulationTests(unittest.TestCase):
         simulation = make_simulation()
         set_wallet(simulation, [1.0, 2.0, 3.0])
 
-        simulation.adjustBetaMicrocanonically()
+        simulation.adjustBetaMicrocanonicalLegacy()
         self.assertAlmostEqual(simulation.coinSelectionDistr.beta, 3.0 / 6.0)
 
         exactBeta = simulation.adjustBetaMicroExact()
