@@ -14,6 +14,13 @@ class SimulationHandler:
         "microcanonicalExact",
         "microcanonicalApprox",
     )
+    COIN_SELECTION_STRATEGIES = {
+        "boltzmann": "selectTokenBoltzmann",
+    }
+    SAMPLING_MODES = (
+        "token",
+        "bucketLegacy",
+    )
 
     def __init__(
         self,
@@ -26,8 +33,16 @@ class SimulationHandler:
         mode="canonical",
         betaAdjustmentMode="legacy",
         seed=None,
+        coinSelectionStrategy="boltzmann",
+        samplingMode="token",
     ):
-        self.useBucketsForProbabilityComp = useBucketsForProbabilityComp ## in case this is true, one computes only the probabilities for the average value of the bucket. After a bucket is selected, one draws a random token from within the bucket
+        self.setCoinSelectionStrategy(coinSelectionStrategy)
+        self.setSamplingMode(samplingMode)
+        if useBucketsForProbabilityComp:
+            self.setSamplingMode("bucketLegacy")
+
+        # Retain the former attribute as a compatibility view for callers that
+        # inspect the simulation state. New code should use samplingMode.
         ### for transaction handling
         self.transactionSet = [1e07] # Initialize with a single transaction, 2e03 for dirichlet, 1e05 for normal distibution
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
@@ -143,20 +158,50 @@ class SimulationHandler:
     
     def tokenSelectionProcess(self, transactionValue):
         """
-        Process the token selection. Currently, the transactionValue is not used, but it might be used in other algorithms to select tokens based on the transaction value.
+        Select a token using the configured strategy and sampling mode.
         """
-        if self.useBucketsForProbabilityComp:
+        strategyMethodName = self.COIN_SELECTION_STRATEGIES[
+            self.coinSelectionStrategy
+        ]
+        strategyMethod = getattr(self, strategyMethodName)
+        return strategyMethod(transactionValue)
+
+    def selectTokenBoltzmann(self, transactionValue):
+        """Select one token using the configured Boltzmann sampling mode."""
+        if self.samplingMode == "bucketLegacy":
             selectedToken, selectBucketIndex, sumOfBucketProbs = self.selectTokenBucketFromDistributionThenPickRandom()
             if selectedToken is None:
                 print("Warning: No suitable token found in the selected bucket.")
-                return None, -1
+                return None, -1, None
             return selectedToken, selectBucketIndex, sumOfBucketProbs
-        else:
+
+        if self.samplingMode == "token":
             selectedToken, selectTokenIndex, sumOfProbs = self.selectTokenFromDistribtion(transactionValue)
             if selectedToken == []:
                 print("Warning: No suitable token found for the transaction value.")
-                return None, -1
+                return None, -1, None
             return selectedToken, selectTokenIndex, sumOfProbs
+
+        raise ValueError(f"Unsupported sampling mode: {self.samplingMode}")
+
+    def setCoinSelectionStrategy(self, coinSelectionStrategy):
+        """Set the algorithm used to choose payment input tokens."""
+        if coinSelectionStrategy not in self.COIN_SELECTION_STRATEGIES:
+            raise ValueError(
+                "Invalid coin-selection strategy. Choose from "
+                f"{', '.join(self.COIN_SELECTION_STRATEGIES)}."
+            )
+        self.coinSelectionStrategy = coinSelectionStrategy
+
+    def setSamplingMode(self, samplingMode):
+        """Set how the configured strategy evaluates selection candidates."""
+        if samplingMode not in self.SAMPLING_MODES:
+            raise ValueError(
+                "Invalid sampling mode. Choose from "
+                f"{', '.join(self.SAMPLING_MODES)}."
+            )
+        self.samplingMode = samplingMode
+        self.useBucketsForProbabilityComp = samplingMode == "bucketLegacy"
 
     def findAllTokensInCertainBucket(self, bucketIndex):
         """

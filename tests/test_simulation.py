@@ -1,6 +1,7 @@
 import contextlib
 import io
 import unittest
+from unittest.mock import Mock
 
 from simulation import SimulationHandler
 from wallet import Token, Wallet
@@ -37,6 +38,62 @@ class SimulationTests(unittest.TestCase):
     def test_invalid_beta_adjustment_mode_is_rejected(self):
         with self.assertRaises(ValueError):
             make_simulation(betaAdjustmentMode="unknown")
+
+    def test_coin_selection_defaults_to_token_level_boltzmann(self):
+        simulation = make_simulation()
+
+        self.assertEqual(simulation.coinSelectionStrategy, "boltzmann")
+        self.assertEqual(simulation.samplingMode, "token")
+        self.assertFalse(simulation.useBucketsForProbabilityComp)
+
+    def test_invalid_coin_selection_strategy_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Invalid coin-selection strategy",
+        ):
+            make_simulation(coinSelectionStrategy="unknown")
+
+    def test_invalid_sampling_mode_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Invalid sampling mode"):
+            make_simulation(samplingMode="unknown")
+
+    def test_bucket_legacy_dispatches_to_existing_bucket_selection(self):
+        simulation = make_simulation(samplingMode="bucketLegacy")
+        selectedToken = simulation.highThroughputWallet.tokens[0]
+        simulation.selectTokenBucketFromDistributionThenPickRandom = Mock(
+            return_value=(selectedToken, 5, 0.75)
+        )
+
+        result = simulation.tokenSelectionProcess(100.0)
+
+        self.assertEqual(result, (selectedToken, 5, 0.75))
+        self.assertTrue(simulation.useBucketsForProbabilityComp)
+        bucketSelection = (
+            simulation.selectTokenBucketFromDistributionThenPickRandom
+        )
+        bucketSelection.assert_called_once_with()
+
+    def test_legacy_bucket_flag_maps_to_bucket_legacy_sampling(self):
+        simulation = make_simulation(useBucketsForProbabilityComp=True)
+
+        self.assertEqual(simulation.samplingMode, "bucketLegacy")
+        self.assertTrue(simulation.useBucketsForProbabilityComp)
+
+    def test_bucket_legacy_preserves_legacy_flag_selection_behavior(self):
+        namedMode = make_simulation(seed=71, samplingMode="bucketLegacy")
+        legacyFlag = make_simulation(
+            seed=71,
+            useBucketsForProbabilityComp=True,
+        )
+        values = [0.5, 0.75, 5.0, 50.0]
+        set_wallet(namedMode, values)
+        set_wallet(legacyFlag, values)
+
+        namedResult = namedMode.tokenSelectionProcess(20.0)
+        legacyResult = legacyFlag.tokenSelectionProcess(20.0)
+
+        self.assertEqual(namedResult[0].sno, legacyResult[0].sno)
+        self.assertEqual(namedResult[1:], legacyResult[1:])
 
     def test_seed_reproduces_independent_internal_random_streams(self):
         first = make_simulation(seed=42)

@@ -231,6 +231,8 @@ def singleSimulation(
     betaAdjustmentMode="legacy",
     dataDirectory='Data',
     seed=None,
+    coinSelectionStrategy="boltzmann",
+    samplingMode="token",
 ):
     simulation = SimulationHandler(
         tokenDenominationBuckets=tokenDenominationBuckets,
@@ -242,6 +244,8 @@ def singleSimulation(
         mode=mode,
         betaAdjustmentMode=betaAdjustmentMode,
         seed=seed,
+        coinSelectionStrategy=coinSelectionStrategy,
+        samplingMode=samplingMode,
     )
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -531,6 +535,8 @@ def runSimulationBatch(
     noPayments=100000,
     dataDirectory='Data',
     seed=None,
+    coinSelectionStrategy='boltzmann',
+    samplingMode='token',
 ):
     """Run the configured simulation batch and collect final-state summaries."""
     totalValues = []
@@ -565,6 +571,8 @@ def runSimulationBatch(
             betaAdjustmentMode=betaAdjustmentMode,
             dataDirectory=dataDirectory,
             seed=simulationSeed,
+            coinSelectionStrategy=coinSelectionStrategy,
+            samplingMode=samplingMode,
         )
 
         paymentTokenCounts = getPaymentTokenCounts(
@@ -757,6 +765,8 @@ def runStandaloneSimulationExperiment(
     transactionScenario='gaussian',
     betaAdjustmentMode='legacy',
     seed=None,
+    coinSelectionStrategy='boltzmann',
+    samplingMode='token',
 ):
     """Run one complete scenario using the former standalone output layout."""
     prepareOutputDirectories(dataDirectory, globalDataDirectory)
@@ -768,6 +778,8 @@ def runStandaloneSimulationExperiment(
         noPayments=noPayments,
         dataDirectory=dataDirectory,
         seed=seed,
+        coinSelectionStrategy=coinSelectionStrategy,
+        samplingMode=samplingMode,
     )
     saveAggregateHistograms(dataDirectory, globalDataDirectory)
     saveGlobalSimulationSummaries(
@@ -785,6 +797,8 @@ def runBetaAdjustmentExperiment(
     numSimulations=100,
     noPayments=100000,
     seed=None,
+    coinSelectionStrategy='boltzmann',
+    samplingMode='token',
 ):
     """Run one workload/beta combination in its own output directory."""
     experimentDirectory = os.path.join(
@@ -809,6 +823,8 @@ def runBetaAdjustmentExperiment(
         transactionScenario=configuration['transactionScenario'],
         betaAdjustmentMode=configuration['betaAdjustmentMode'],
         seed=seed,
+        coinSelectionStrategy=coinSelectionStrategy,
+        samplingMode=samplingMode,
     )
     return experimentDirectory
 
@@ -819,6 +835,8 @@ def runBetaAdjustmentExperimentMatrix(
     numSimulations=100,
     noPayments=100000,
     seed=None,
+    coinSelectionStrategy='boltzmann',
+    samplingMode='token',
 ):
     """Run all six workload/beta combinations in isolated directories."""
     os.makedirs(outputRoot, exist_ok=True)
@@ -832,6 +850,8 @@ def runBetaAdjustmentExperimentMatrix(
                 numSimulations=numSimulations,
                 noPayments=noPayments,
                 seed=seed,
+                coinSelectionStrategy=coinSelectionStrategy,
+                samplingMode=samplingMode,
             )
         )
     return experimentDirectories

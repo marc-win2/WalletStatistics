@@ -51,6 +51,30 @@ and total wallet value $E$ using one of three modes:
 
 Every simulation starts with one funding token worth $10^7$.
 
+### Coin-selection configuration
+
+Coin-selection behavior is configured along two separate axes:
+
+- `coinSelectionStrategy` selects the algorithm. Currently, `boltzmann` is the
+  only registered strategy.
+- `samplingMode` selects how that strategy evaluates candidates. `token` uses
+  the supported token-level computation, while `bucketLegacy` preserves the
+  former experimental bucket-based computation unchanged.
+
+For example:
+
+```python
+SimulationHandler(
+    tokenDenominationBuckets=token_buckets,
+    coinSelectionStrategy="boltzmann",
+    samplingMode="bucketLegacy",
+)
+```
+
+The former `useBucketsForProbabilityComp=True` constructor argument remains
+available for compatibility and maps to `samplingMode="bucketLegacy"`. New code
+should use `samplingMode` directly.
+
 ## Installation
 
 Python 3.9 or newer is recommended.
@@ -190,13 +214,13 @@ the affected plot with a warning. Outputs are written to
 
 ## Known limitation
 
-The bucket-accelerated selection path (`useBucketsForProbabilityComp=True`) is
-experimental and is not used by the standard experiments. It currently assigns
-one Boltzmann weight to each non-empty bucket without accounting for how many
-tokens the bucket contains. Consequently, it does not reproduce token-level
-Boltzmann sampling when bucket occupancies differ. Unlike the token-level path,
-it also has no fallback if every bucket weight numerically underflows to zero.
-Keep `useBucketsForProbabilityComp=False` for the supported simulation setup.
+The `bucketLegacy` sampling mode is experimental and is not used by the standard
+experiments. It assigns one Boltzmann weight to each non-empty bucket without
+accounting for how many tokens the bucket contains. Consequently, it does not
+reproduce token-level Boltzmann sampling when bucket occupancies differ. Unlike
+the token-level path, it also has no fallback if every bucket weight numerically
+underflows to zero. Keep `samplingMode="token"` for the supported simulation
+setup.
 
 ## Source layout
 
