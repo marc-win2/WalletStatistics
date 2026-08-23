@@ -55,11 +55,14 @@ Every simulation starts with one funding token worth $10^7$.
 
 Coin-selection behavior is configured along two separate axes:
 
-- `coinSelectionStrategy` selects the algorithm. Currently, `boltzmann` is the
-  only registered strategy.
-- `samplingMode` selects how that strategy evaluates candidates. `token` uses
-  the supported token-level computation, while `bucketLegacy` preserves the
-  former experimental bucket-based computation unchanged.
+- `coinSelectionStrategy` selects the algorithm. `boltzmann` (and the alias
+  `distributionDraw`) retains the established token-by-token distribution
+  behavior. Payment-level alternatives are `greedy`, `branchAndBound` (also
+  `branch_and_bound`), and `rag`.
+- For `boltzmann`/`distributionDraw`, `samplingMode` selects how candidates are
+  evaluated. `token` uses the supported token-level computation, while
+  `bucketLegacy` preserves the former experimental bucket-based computation
+  unchanged. Payment-level strategies require `samplingMode="token"`.
 
 For example:
 
@@ -74,6 +77,19 @@ SimulationHandler(
 The former `useBucketsForProbabilityComp=True` constructor argument remains
 available for compatibility and maps to `samplingMode="bucketLegacy"`. New code
 should use `samplingMode` directly.
+
+The payment-level strategies first create a non-mutating complete selection
+plan, then remove its concrete input tokens and add one change token when the
+plan has change. This retains token serial-number and bucket accounting. The
+most recent plan is available as `simulation.lastSelectionPlan` after a
+successful payment-level selection.
+
+`branchAndBound` accepts `max_bnb_overshoot` (default `None`, meaning the
+available wallet balance is the search bound) and produces normal change for
+an accepted overshoot. `rag` accepts `probability`,
+`target_pool_size`, and `variant` (`"largest_first"`, `"fit"`, or
+`"smallest_first_consolidate"`). A seeded simulation supplies its existing
+selection RNG to RAG, making its sequence reproducible.
 
 ## Installation
 
@@ -226,6 +242,8 @@ setup.
 
 - `simulation.py`: wallet lifecycle, payments, deposits, and beta adjustment.
 - `coinselection.py`: Boltzmann weights and token-selection distributions.
+- `serial_coin_selection.py`: pure Greedy, Branch-and-Bound, and RAG payment
+  planners plus their shared selection-plan contract.
 - `wallet.py`: token and wallet models plus denomination handling.
 - `transaction.py`: random transaction generators.
 - `main.py`: experiment orchestration and output generation.
@@ -235,8 +253,11 @@ setup.
 
 Parts of the preparation of this repository for publication on GitHub, as well
 as later-stage code support primarily concerning `main.py`, were carried out
-with assistance from OpenAI's GPT-5.6 Sol model via Codex. The resulting changes
-were reviewed and accepted by the repository author.
+with assistance from OpenAI's ChatGPT 5.6 Sol model. The newly added
+`serial_coin_selection.py` and `tests/test_serial_coin_selection.py` files, and
+most of their integration into the simulator, were generated primarily by the
+model. The resulting changes were reviewed and accepted by the repository
+author.
 
 ## License
 

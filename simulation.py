@@ -2,6 +2,13 @@
 import numpy as np
 from transaction import initializeRandomNumGenerator, generateUniformFloats 
 from coinselection import CoinSelectionDistribution
+from serial_coin_selection import (
+    BranchAndBoundStrategy,
+    GreedyStrategy,
+    InsufficientFundsError,
+    RagVariant,
+    RandomizedAdaptiveGreedyStrategy,
+)
 from wallet import MINIMUM_DENOMINATION, Token, Wallet, roundToMinimumDenomination
 
 
@@ -16,6 +23,11 @@ class SimulationHandler:
     )
     COIN_SELECTION_STRATEGIES = {
         "boltzmann": "selectTokenBoltzmann",
+        "distributionDraw": "selectTokenBoltzmann",
+        "greedy": "selectPaymentPlan",
+        "branchAndBound": "selectPaymentPlan",
+        "branch_and_bound": "selectPaymentPlan",
+        "rag": "selectPaymentPlan",
     }
     SAMPLING_MODES = (
         "token",
@@ -35,11 +47,16 @@ class SimulationHandler:
         seed=None,
         coinSelectionStrategy="boltzmann",
         samplingMode="token",
+        max_bnb_overshoot=None,
+        probability=1.0,
+        target_pool_size=None,
+        variant=RagVariant.LargestFirst,
     ):
         self.setCoinSelectionStrategy(coinSelectionStrategy)
         self.setSamplingMode(samplingMode)
         if useBucketsForProbabilityComp:
             self.setSamplingMode("bucketLegacy")
+        self._validateSamplingModeCompatibility()
 
         # Retain the former attribute as a compatibility view for callers that
         # inspect the simulation state. New code should use samplingMode.
@@ -76,6 +93,17 @@ class SimulationHandler:
             ).spawn(2)
         self.randomSeed = seed
         self.ownrng = initializeRandomNumGenerator(tokenSelectionSeed)
+        self.max_bnb_overshoot = max_bnb_overshoot
+        self.rag_probability = probability
+        self.rag_target_pool_size = target_pool_size
+        self.rag_variant = variant
+        # Construct once during setup solely to validate the strategy-specific
+        # configuration.  Selection itself remains payment-local and pure.
+        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw"}:
+            self._createPaymentStrategy()
+        # Filled only by payment-level strategies.  Keeping it separate from
+        # handlePayment's Wallet return value preserves the old public API.
+        self.lastSelectionPlan = None
 
 
         if drawDepositToken:
@@ -166,6 +194,34 @@ class SimulationHandler:
         strategyMethod = getattr(self, strategyMethodName)
         return strategyMethod(transactionValue)
 
+    def _createPaymentStrategy(self):
+        """Build the configured pure, payment-level strategy on demand."""
+        if self.coinSelectionStrategy == "greedy":
+            return GreedyStrategy()
+        if self.coinSelectionStrategy in {"branchAndBound", "branch_and_bound"}:
+            return BranchAndBoundStrategy(
+                max_bnb_overshoot=self.max_bnb_overshoot
+            )
+        if self.coinSelectionStrategy == "rag":
+            return RandomizedAdaptiveGreedyStrategy(
+                probability=self.rag_probability,
+                target_pool_size=self.rag_target_pool_size,
+                variant=self.rag_variant,
+            )
+        raise ValueError(
+            f"{self.coinSelectionStrategy!r} is not a payment-level strategy."
+        )
+
+    def selectPaymentPlan(self, transactionValue):
+        """Plan a complete selection without mutating the wallet."""
+        strategy = self._createPaymentStrategy()
+        try:
+            return strategy.select(
+                self.highThroughputWallet.tokens, transactionValue, rng=self.ownrng
+            )
+        except InsufficientFundsError as error:
+            raise ValueError(str(error)) from error
+
     def selectTokenBoltzmann(self, transactionValue):
         """Select one token using the configured Boltzmann sampling mode."""
         if self.samplingMode == "bucketLegacy":
@@ -191,6 +247,11 @@ class SimulationHandler:
                 "Invalid coin-selection strategy. Choose from "
                 f"{', '.join(self.COIN_SELECTION_STRATEGIES)}."
             )
+        if (
+            getattr(self, "samplingMode", None) == "bucketLegacy"
+            and coinSelectionStrategy not in {"boltzmann", "distributionDraw"}
+        ):
+            self._raiseBucketLegacyCompatibilityError()
         self.coinSelectionStrategy = coinSelectionStrategy
 
     def setSamplingMode(self, samplingMode):
@@ -200,8 +261,29 @@ class SimulationHandler:
                 "Invalid sampling mode. Choose from "
                 f"{', '.join(self.SAMPLING_MODES)}."
             )
+        if (
+            samplingMode == "bucketLegacy"
+            and getattr(self, "coinSelectionStrategy", None)
+            not in {"boltzmann", "distributionDraw", None}
+        ):
+            self._raiseBucketLegacyCompatibilityError()
         self.samplingMode = samplingMode
         self.useBucketsForProbabilityComp = samplingMode == "bucketLegacy"
+
+    def _validateSamplingModeCompatibility(self):
+        """Reject bucket sampling where no distribution is being sampled."""
+        if (
+            self.samplingMode == "bucketLegacy"
+            and self.coinSelectionStrategy not in {"boltzmann", "distributionDraw"}
+        ):
+            self._raiseBucketLegacyCompatibilityError()
+
+    @staticmethod
+    def _raiseBucketLegacyCompatibilityError():
+        raise ValueError(
+            "samplingMode='bucketLegacy' is only supported by the boltzmann "
+            "and distributionDraw coin-selection strategies."
+        )
 
     def findAllTokensInCertainBucket(self, bucketIndex):
         """
@@ -475,6 +557,26 @@ class SimulationHandler:
             )
 
         selectedWallet = Wallet()
+
+        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw"}:
+            # Plan before changing the wallet, then apply the concrete inputs
+            # as one transaction.  Plans carry original Token identities and
+            # therefore retain serial-number accounting and bucket updates.
+            plan = self.selectPaymentPlan(remainingPaymentValue)
+            for selectedToken in plan.inputs:
+                if self.highThroughputWallet.searchTokenBySno(selectedToken.sno) is None:
+                    raise RuntimeError("Selection plan contains a token absent from the wallet.")
+            for selectedToken in plan.inputs:
+                selectedWallet.addToken(selectedToken)
+                self.removeTokenOwnWallet(selectedToken)
+                if self.adjustBetaAfterEachTransaction:
+                    self.adjustBetaDynamically()
+            if plan.change > self.eps:
+                token = Token(plan.change, serialno=self.__globalTokenIndex)
+                self.addTokenToOwnWallet(token)
+                selectedWallet.addToken(token)
+            self.lastSelectionPlan = plan
+            return selectedWallet
         
         while remainingPaymentValue > 0.0 and np.abs(remainingPaymentValue) > 1e-06:
             if self.highThroughputWallet.isEmpty():

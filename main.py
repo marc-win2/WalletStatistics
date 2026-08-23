@@ -233,6 +233,10 @@ def singleSimulation(
     seed=None,
     coinSelectionStrategy="boltzmann",
     samplingMode="token",
+    max_bnb_overshoot=None,
+    probability=1.0,
+    target_pool_size=None,
+    variant="largest_first",
 ):
     simulation = SimulationHandler(
         tokenDenominationBuckets=tokenDenominationBuckets,
@@ -246,6 +250,10 @@ def singleSimulation(
         seed=seed,
         coinSelectionStrategy=coinSelectionStrategy,
         samplingMode=samplingMode,
+        max_bnb_overshoot=max_bnb_overshoot,
+        probability=probability,
+        target_pool_size=target_pool_size,
+        variant=variant,
     )
     print("SimulationHandler initialized.")
     print("simulation.highThroughputWallet = ", simulation.highThroughputWallet)   
@@ -537,6 +545,10 @@ def runSimulationBatch(
     seed=None,
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
+    max_bnb_overshoot=None,
+    probability=1.0,
+    target_pool_size=None,
+    variant='largest_first',
 ):
     """Run the configured simulation batch and collect final-state summaries."""
     totalValues = []
@@ -573,6 +585,10 @@ def runSimulationBatch(
             seed=simulationSeed,
             coinSelectionStrategy=coinSelectionStrategy,
             samplingMode=samplingMode,
+            max_bnb_overshoot=max_bnb_overshoot,
+            probability=probability,
+            target_pool_size=target_pool_size,
+            variant=variant,
         )
 
         paymentTokenCounts = getPaymentTokenCounts(
@@ -767,6 +783,10 @@ def runStandaloneSimulationExperiment(
     seed=None,
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
+    max_bnb_overshoot=None,
+    probability=1.0,
+    target_pool_size=None,
+    variant='largest_first',
 ):
     """Run one complete scenario using the former standalone output layout."""
     prepareOutputDirectories(dataDirectory, globalDataDirectory)
@@ -780,6 +800,10 @@ def runStandaloneSimulationExperiment(
         seed=seed,
         coinSelectionStrategy=coinSelectionStrategy,
         samplingMode=samplingMode,
+        max_bnb_overshoot=max_bnb_overshoot,
+        probability=probability,
+        target_pool_size=target_pool_size,
+        variant=variant,
     )
     saveAggregateHistograms(dataDirectory, globalDataDirectory)
     saveGlobalSimulationSummaries(
@@ -799,6 +823,10 @@ def runBetaAdjustmentExperiment(
     seed=None,
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
+    max_bnb_overshoot=None,
+    probability=1.0,
+    target_pool_size=None,
+    variant='largest_first',
 ):
     """Run one workload/beta combination in its own output directory."""
     experimentDirectory = os.path.join(
@@ -825,6 +853,10 @@ def runBetaAdjustmentExperiment(
         seed=seed,
         coinSelectionStrategy=coinSelectionStrategy,
         samplingMode=samplingMode,
+        max_bnb_overshoot=max_bnb_overshoot,
+        probability=probability,
+        target_pool_size=target_pool_size,
+        variant=variant,
     )
     return experimentDirectory
 
@@ -837,6 +869,10 @@ def runBetaAdjustmentExperimentMatrix(
     seed=None,
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
+    max_bnb_overshoot=None,
+    probability=1.0,
+    target_pool_size=None,
+    variant='largest_first',
 ):
     """Run all six workload/beta combinations in isolated directories."""
     os.makedirs(outputRoot, exist_ok=True)
@@ -852,6 +888,10 @@ def runBetaAdjustmentExperimentMatrix(
                 seed=seed,
                 coinSelectionStrategy=coinSelectionStrategy,
                 samplingMode=samplingMode,
+                max_bnb_overshoot=max_bnb_overshoot,
+                probability=probability,
+                target_pool_size=target_pool_size,
+                variant=variant,
             )
         )
     return experimentDirectories
