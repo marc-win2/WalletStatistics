@@ -285,6 +285,18 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(first.lastSelectionPlan.selected_total, second.lastSelectionPlan.selected_total)
         self.assertEqual(first.lastSelectionPlan.change, second.lastSelectionPlan.change)
 
+    def test_rag_defaults_to_fit_variant(self):
+        simulation = make_simulation(coinSelectionStrategy="rag", probability=1.0)
+        set_wallet(simulation, [12.0, 6.0, 4.0])
+
+        simulation.handlePayment(-10.0)
+
+        self.assertEqual(
+            [token.value for token in simulation.lastSelectionPlan.inputs],
+            [6.0, 4.0],
+        )
+        self.assertEqual(simulation.lastSelectionPlan.strategy, "rag_fit")
+
     def test_payment_level_strategy_insufficient_funds_is_non_mutating(self):
         simulation = make_simulation(coinSelectionStrategy="rag", probability=1.0)
         set_wallet(simulation, [3.0, 2.0])

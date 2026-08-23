@@ -126,7 +126,7 @@ class BranchAndBoundStrategyTests(unittest.TestCase):
         self.assertTrue(plan.bnb_fallback_used)
         self.assertTrue(plan.used_bnb_fallback)
 
-    def test_default_unbounded_search_finds_minimum_overshoot(self):
+    def test_default_twenty_percent_cap_accepts_inclusive_boundary(self):
         plan = plan_branch_and_bound_selection(
             [Token(14.00, 1), Token(12.00, 2), Token(6.00, 3)], 10.00
         )
@@ -136,6 +136,16 @@ class BranchAndBoundStrategyTests(unittest.TestCase):
         self.assertEqual(plan.change, 2.00)
         self.assertEqual(plan.strategy, "branch_and_bound")
         self.assertFalse(plan.bnb_fallback_used)
+
+    def test_default_twenty_percent_cap_falls_back_above_boundary(self):
+        token = Token(12.01, 1)
+
+        plan = plan_branch_and_bound_selection([token], 10.00)
+
+        self.assertEqual(plan.inputs, (token,))
+        self.assertEqual(plan.change, 2.01)
+        self.assertEqual(plan.strategy, "branch_and_bound_fallback")
+        self.assertTrue(plan.bnb_fallback_used)
 
     def test_explicit_overshoot_cap_causes_fallback_outside_bound(self):
         token = Token(12.00, 1)
@@ -251,12 +261,11 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     RandomizedAdaptiveGreedyStrategy(probability)
 
-    def test_probability_one_fit_matches_greedy(self):
+    def test_probability_one_default_fit_matches_greedy(self):
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(12.00, 1), Token(6.00, 2), Token(4.00, 3)],
             10.00,
             probability=1.0,
-            variant=RagVariant.Fit,
             rng=ConstantRng(0.0),
         )
 

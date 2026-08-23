@@ -236,7 +236,7 @@ def singleSimulation(
     max_bnb_overshoot=None,
     probability=1.0,
     target_pool_size=None,
-    variant="largest_first",
+    variant="fit",
 ):
     simulation = SimulationHandler(
         tokenDenominationBuckets=tokenDenominationBuckets,
@@ -548,7 +548,7 @@ def runSimulationBatch(
     max_bnb_overshoot=None,
     probability=1.0,
     target_pool_size=None,
-    variant='largest_first',
+    variant='fit',
 ):
     """Run the configured simulation batch and collect final-state summaries."""
     totalValues = []
@@ -786,7 +786,7 @@ def runStandaloneSimulationExperiment(
     max_bnb_overshoot=None,
     probability=1.0,
     target_pool_size=None,
-    variant='largest_first',
+    variant='fit',
 ):
     """Run one complete scenario using the former standalone output layout."""
     prepareOutputDirectories(dataDirectory, globalDataDirectory)
@@ -826,7 +826,7 @@ def runBetaAdjustmentExperiment(
     max_bnb_overshoot=None,
     probability=1.0,
     target_pool_size=None,
-    variant='largest_first',
+    variant='fit',
 ):
     """Run one workload/beta combination in its own output directory."""
     experimentDirectory = os.path.join(
@@ -872,7 +872,7 @@ def runBetaAdjustmentExperimentMatrix(
     max_bnb_overshoot=None,
     probability=1.0,
     target_pool_size=None,
-    variant='largest_first',
+    variant='fit',
 ):
     """Run all six workload/beta combinations in isolated directories."""
     os.makedirs(outputRoot, exist_ok=True)

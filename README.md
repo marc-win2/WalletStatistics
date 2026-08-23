@@ -84,10 +84,10 @@ plan has change. This retains token serial-number and bucket accounting. The
 most recent plan is available as `simulation.lastSelectionPlan` after a
 successful payment-level selection.
 
-`branchAndBound` accepts `max_bnb_overshoot` (default `None`, meaning the
-available wallet balance is the search bound) and produces normal change for
-an accepted overshoot. `rag` accepts `probability`,
-`target_pool_size`, and `variant` (`"largest_first"`, `"fit"`, or
+`branchAndBound` accepts an absolute `max_bnb_overshoot`. When it is left at
+`None`, the search permits an overshoot of up to 20% of the current payment
+amount; accepted overshoot produces normal change. `rag` accepts `probability`,
+`target_pool_size`, and `variant` (`"fit"` by default, `"largest_first"`, or
 `"smallest_first_consolidate"`). A seeded simulation supplies its existing
 selection RNG to RAG, making its sequence reproducible.
 

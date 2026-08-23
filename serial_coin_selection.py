@@ -171,10 +171,15 @@ def plan_greedy_selection(
 
 
 class BranchAndBoundStrategy(CoinSelectionStrategy):
-    """Inclusion-first subset search with a largest-first safety fallback."""
+    """Inclusion-first subset search with a largest-first safety fallback.
+
+    When no absolute overshoot is configured, the search accepts up to 20%
+    of the current payment amount as change.
+    """
 
     name = "branch_and_bound"
     fallback_name = "branch_and_bound_fallback"
+    DEFAULT_MAX_OVERSHOOT_PERCENT = 20
     MAX_SEARCH_ATTEMPTS = 100_000
     MAX_UTXOS = 2_000
 
@@ -222,23 +227,26 @@ class BranchAndBoundStrategy(CoinSelectionStrategy):
             return self._fallback(ordered, payment_cents)
 
         if self._max_bnb_overshoot_cents is None:
-            upper_bound_cents = available_total_cents
+            # Keep the default relative to each payment. Integer division
+            # rounds down to cents so the limit never exceeds 20%.
+            max_overshoot_cents = (
+                payment_cents * self.DEFAULT_MAX_OVERSHOOT_PERCENT // 100
+            )
         else:
-            upper_bound_cents = payment_cents + self._max_bnb_overshoot_cents
+            max_overshoot_cents = self._max_bnb_overshoot_cents
+        upper_bound_cents = payment_cents + max_overshoot_cents
         suffix_sums = [0] * (len(ordered) + 1)
         for index in range(len(ordered) - 1, -1, -1):
             suffix_sums[index] = suffix_sums[index + 1] + ordered[index][1]
 
         # Stack entries contain the actual current subset, rather than a
-        # reusable selection bitmap.  This deliberately avoids stale-tail
-        # state from the Rust reference implementation.
+        # reusable selection bitmap.
         stack = [(0, 0, ())]
         best_inputs = None
         best_total_cents = None
         attempts = 0
 
         while stack:
-            # This is an expanded-node budget, matching the Rust ``tries``
             # counter: once exhausted, even pending children are not visited.
             if attempts >= self.MAX_SEARCH_ATTEMPTS:
                 break
@@ -361,7 +369,7 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
         self,
         probability: float,
         target_pool_size: Optional[int] = None,
-        variant: RagVariant = RagVariant.LargestFirst,
+        variant: RagVariant = RagVariant.Fit,
     ):
         if not isinstance(probability, (int, float)) or not math.isfinite(probability):
             raise ValueError("Probability must be finite and between 0 and 1.")
@@ -580,7 +588,7 @@ def plan_randomized_adaptive_greedy_selection(
     payment_amount: float,
     probability: float,
     target_pool_size: Optional[int] = None,
-    variant: RagVariant = RagVariant.LargestFirst,
+    variant: RagVariant = RagVariant.Fit,
     rng: Optional[object] = None,
 ) -> SelectionPlan:
     """Convenience entry point for Randomized Adaptive Greedy selection."""

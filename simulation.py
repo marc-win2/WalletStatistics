@@ -50,7 +50,7 @@ class SimulationHandler:
         max_bnb_overshoot=None,
         probability=1.0,
         target_pool_size=None,
-        variant=RagVariant.LargestFirst,
+        variant=RagVariant.Fit,
     ):
         self.setCoinSelectionStrategy(coinSelectionStrategy)
         self.setSamplingMode(samplingMode)
