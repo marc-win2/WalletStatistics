@@ -134,13 +134,41 @@ The two experiment workloads are:
 The integer multinomial/Dirichlet generator remains available in the source but
 is not part of the standard experiment matrix.
 
-Running `python3 main.py` starts the full matrix: all three beta modes crossed
-with both workloads, with 100 independent runs and 100 payments per run. Change
-the number of payments with `--num_iter`; the value must be positive and divisible
-by 10 because the Dirichlet workload generates payments in groups of ten:
+Running `python3 main.py` starts the complete experiment set. Boltzmann crosses
+the three beta modes with both workloads. Because RAG Fit and Branch-and-Bound
+do not use beta for coin selection, each of them runs the two workloads only
+once with dynamic beta adjustment disabled. By default, every configuration
+contains 100 independent runs and 100 payments per run. Change these dimensions
+with `--num_runs` and `--num_iter`; the payment count must be positive and
+divisible by 10 because the Dirichlet workload generates payments in groups of
+ten:
 
 ```bash
-python3 main.py --num_iter 100000
+python3 main.py --num_runs 100 --num_iter 100000
+```
+
+Use `--strategies` to run only selected strategies. For example, this adds the
+RAG Fit and Branch-and-Bound results without rerunning the existing Boltzmann
+matrix:
+
+```bash
+python3 main.py \
+  --strategies rag_fit branch_and_bound \
+  --num_runs 100 \
+  --num_iter 100000 \
+  --seed 12345
+```
+
+Use `--strategy_output_path` to write the beta-independent strategies to a
+different root:
+
+```bash
+python3 main.py \
+  --strategies rag_fit branch_and_bound \
+  --strategy_output_path Simulations/CoinSelectionGrid \
+  --num_runs 100 \
+  --num_iter 100000 \
+  --seed 12345
 ```
 
 Runs are nondeterministic by default, as before. To reproduce a complete
@@ -155,9 +183,20 @@ transaction generation and token selection. For a given scenario and run
 index, all beta-adjustment modes receive identical input transactions while
 retaining independent coin-selection randomness.
 
-Large iteration counts are computationally expensive. Results are written below
-`Simulations/BetaAdjustmentMatrix/`, with a separate directory for each of the
-six configurations.
+Large iteration counts are computationally expensive, particularly for
+Branch-and-Bound. The six established Boltzmann configurations remain in
+`Simulations/BetaAdjustmentMatrix/`. The four beta-independent strategy
+configurations are written separately to `Simulations/CoinSelectionMatrix/`:
+
+```text
+Simulations/CoinSelectionMatrix/
+├── RAGFit/
+│   ├── Gaussian/
+│   └── DirichletFloat/
+└── BranchAndBound/
+    ├── Gaussian/
+    └── DirichletFloat/
+```
 
 Each configuration contains per-run data and plots in `Data/` and aggregate
 summaries in `DataGlobal/`. The `.dat` files contain either one value per line or
@@ -207,6 +246,32 @@ python3 averageSimulationPlots.py \
   --chunk_size 500 \
   --data_path Simulations/example/Data \
   --save_path Simulations/example/DataGlobal
+```
+
+After generating the beta-independent strategy matrix, aggregate all four new
+configurations with the wrapper script:
+
+```bash
+./averageSimulationMatrix.sh \
+  --num-runs 100 \
+  --num-payments 100000 \
+  --chunk-size 20000
+```
+
+Use `--matrix-path` if `main.py` was run with a custom
+`--strategy_output_path`. The run and payment counts must match the values used
+for `main.py`. The script discovers every configuration containing a `Data/`
+directory below that path, independently of its strategy name. To process only
+specific configurations, repeat `--configuration` with a relative or absolute
+configuration path:
+
+```bash
+./averageSimulationMatrix.sh \
+  --matrix-path Simulations/CoinSelectionMatrix \
+  --configuration RAGFit/Gaussian \
+  --configuration BranchAndBound/DirichletFloat \
+  --num-runs 100 \
+  --num-payments 100000
 ```
 
 ### Comparing beta-adjustment modes

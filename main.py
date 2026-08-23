@@ -549,6 +549,7 @@ def runSimulationBatch(
     probability=1.0,
     target_pool_size=None,
     variant='fit',
+    adjustBeta=True,
 ):
     """Run the configured simulation batch and collect final-state summaries."""
     totalValues = []
@@ -576,7 +577,7 @@ def runSimulationBatch(
             tokenDenominationBuckets,
             simulationIndex,
             drawDeposit=False,
-            adjustBeta=True,
+            adjustBeta=adjustBeta,
             doEmergRefund=False,
             useBuckets=False,
             mode="canonical",
@@ -627,11 +628,11 @@ def saveAggregateHistograms(
     globalDataDirectory='DataGlobal',
 ):
     """Plot aggregate transactions and token values accumulated across runs."""
-    totalTransactions = np.loadtxt(
-        os.path.join(dataDirectory, 'total_transactions.dat')
+    totalTransactions = np.atleast_1d(
+        np.loadtxt(os.path.join(dataDirectory, 'total_transactions.dat'))
     )
-    allTokenValues = np.loadtxt(
-        os.path.join(dataDirectory, 'total_token_values_.dat')
+    allTokenValues = np.atleast_1d(
+        np.loadtxt(os.path.join(dataDirectory, 'total_token_values_.dat'))
     )
 
     plt.hist(totalTransactions, bins=200, density=False)
@@ -772,6 +773,48 @@ def getBetaAdjustmentExperimentConfigurations():
     return configurations
 
 
+def getCoinSelectionExperimentConfigurations():
+    """Return the coin-selection strategies included in the full grid."""
+    return (
+        {
+            'name': 'boltzmann',
+            'directoryName': None,
+            'coinSelectionStrategy': 'boltzmann',
+            'variant': 'fit',
+        },
+        {
+            'name': 'rag_fit',
+            'directoryName': 'RAGFit',
+            'coinSelectionStrategy': 'rag',
+            'variant': 'fit',
+        },
+        {
+            'name': 'branch_and_bound',
+            'directoryName': 'BranchAndBound',
+            'coinSelectionStrategy': 'branchAndBound',
+            'variant': 'fit',
+        },
+    )
+
+
+def getCoinSelectionWorkloadConfigurations():
+    """Return the two workloads used for beta-independent strategies."""
+    return (
+        {
+            'directoryName': 'Gaussian',
+            'transactionScenario': 'gaussian',
+            # Required by the shared simulator API but inactive because
+            # adjustBeta is disabled for these strategies.
+            'betaAdjustmentMode': 'legacy',
+        },
+        {
+            'directoryName': 'DirichletFloat',
+            'transactionScenario': 'dirichletFloat',
+            'betaAdjustmentMode': 'legacy',
+        },
+    )
+
+
 def runStandaloneSimulationExperiment(
     tokenDenominationBuckets,
     dataDirectory='Data',
@@ -787,6 +830,7 @@ def runStandaloneSimulationExperiment(
     probability=1.0,
     target_pool_size=None,
     variant='fit',
+    adjustBeta=True,
 ):
     """Run one complete scenario using the former standalone output layout."""
     prepareOutputDirectories(dataDirectory, globalDataDirectory)
@@ -804,6 +848,7 @@ def runStandaloneSimulationExperiment(
         probability=probability,
         target_pool_size=target_pool_size,
         variant=variant,
+        adjustBeta=adjustBeta,
     )
     saveAggregateHistograms(dataDirectory, globalDataDirectory)
     saveGlobalSimulationSummaries(
@@ -827,6 +872,7 @@ def runBetaAdjustmentExperiment(
     probability=1.0,
     target_pool_size=None,
     variant='fit',
+    adjustBeta=True,
 ):
     """Run one workload/beta combination in its own output directory."""
     experimentDirectory = os.path.join(
@@ -837,11 +883,20 @@ def runBetaAdjustmentExperiment(
     dataDirectory = os.path.join(experimentDirectory, 'Data')
     globalDataDirectory = os.path.join(experimentDirectory, 'DataGlobal')
 
-    print(
-        "Running experiment:",
-        configuration['transactionScenario'],
-        configuration['betaAdjustmentMode'],
-    )
+    if adjustBeta:
+        print(
+            "Running experiment:",
+            coinSelectionStrategy,
+            configuration['transactionScenario'],
+            configuration['betaAdjustmentMode'],
+        )
+    else:
+        print(
+            "Running experiment:",
+            coinSelectionStrategy,
+            configuration['transactionScenario'],
+            "(beta adjustment disabled)",
+        )
     runStandaloneSimulationExperiment(
         tokenDenominationBuckets,
         dataDirectory=dataDirectory,
@@ -857,6 +912,7 @@ def runBetaAdjustmentExperiment(
         probability=probability,
         target_pool_size=target_pool_size,
         variant=variant,
+        adjustBeta=adjustBeta,
     )
     return experimentDirectory
 
@@ -897,6 +953,78 @@ def runBetaAdjustmentExperimentMatrix(
     return experimentDirectories
 
 
+def runCoinSelectionExperimentGrid(
+    tokenDenominationBuckets,
+    betaOutputRoot='Simulations/BetaAdjustmentMatrix',
+    strategyOutputRoot='Simulations/CoinSelectionMatrix',
+    numSimulations=100,
+    noPayments=100000,
+    seed=None,
+    strategies=None,
+):
+    """Run the beta matrix and beta-independent strategy workload grids."""
+    strategyConfigurations = getCoinSelectionExperimentConfigurations()
+    availableStrategies = {
+        configuration['name'] for configuration in strategyConfigurations
+    }
+    selectedStrategies = (
+        availableStrategies if strategies is None else set(strategies)
+    )
+    unknownStrategies = selectedStrategies - availableStrategies
+    if unknownStrategies:
+        raise ValueError(
+            "Unknown coin-selection strategies: "
+            + ", ".join(sorted(unknownStrategies))
+        )
+
+    experimentDirectories = []
+    for strategyConfiguration in strategyConfigurations:
+        if strategyConfiguration['name'] not in selectedStrategies:
+            continue
+        if strategyConfiguration['name'] == 'boltzmann':
+            experimentDirectories.extend(
+                runBetaAdjustmentExperimentMatrix(
+                    tokenDenominationBuckets,
+                    outputRoot=betaOutputRoot,
+                    numSimulations=numSimulations,
+                    noPayments=noPayments,
+                    seed=seed,
+                    coinSelectionStrategy='boltzmann',
+                )
+            )
+            continue
+
+        strategyRoot = os.path.join(
+            strategyOutputRoot,
+            strategyConfiguration['directoryName'],
+        )
+        for workloadConfiguration in getCoinSelectionWorkloadConfigurations():
+            experimentDirectories.append(
+                runBetaAdjustmentExperiment(
+                    strategyRoot,
+                    workloadConfiguration,
+                    tokenDenominationBuckets,
+                    numSimulations=numSimulations,
+                    noPayments=noPayments,
+                    seed=seed,
+                    coinSelectionStrategy=strategyConfiguration[
+                        'coinSelectionStrategy'
+                    ],
+                    variant=strategyConfiguration['variant'],
+                    adjustBeta=False,
+                )
+            )
+    return experimentDirectories
+
+
+def positiveInteger(value):
+    """Validate a positive integer supplied on the command line."""
+    integerValue = int(value)
+    if integerValue <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return integerValue
+
+
 def paymentIterationCount(value):
     """Validate a payment count for both experiment-matrix workloads."""
     numberOfPayments = int(value)
@@ -920,13 +1048,57 @@ def randomSeed(value):
 def parseCommandLineArguments(arguments=None):
     """Parse command-line options for the experiment matrix."""
     parser = argparse.ArgumentParser(
-        description="Run the Boltzmann Draw beta-adjustment experiment matrix."
+        description=(
+            "Run the Boltzmann, RAG Fit, and Branch-and-Bound experiment grid."
+        )
     )
     parser.add_argument(
         "--num_iter",
         type=paymentIterationCount,
         default=100,
         help="number of payments per simulation run (default: 100)",
+    )
+    parser.add_argument(
+        "--num_runs",
+        "--num-runs",
+        dest="num_runs",
+        type=positiveInteger,
+        default=100,
+        help="number of simulation runs per configuration (default: 100)",
+    )
+    strategyNames = tuple(
+        configuration['name']
+        for configuration in getCoinSelectionExperimentConfigurations()
+    )
+    parser.add_argument(
+        "--strategies",
+        nargs="+",
+        choices=strategyNames,
+        default=strategyNames,
+        help=(
+            "coin-selection strategies to run (default: boltzmann rag_fit "
+            "branch_and_bound)"
+        ),
+    )
+    parser.add_argument(
+        "--beta_output_path",
+        "--beta-output-path",
+        dest="beta_output_path",
+        default="Simulations/BetaAdjustmentMatrix",
+        help=(
+            "root directory for Boltzmann beta-matrix output "
+            "(default: Simulations/BetaAdjustmentMatrix)"
+        ),
+    )
+    parser.add_argument(
+        "--strategy_output_path",
+        "--strategy-output-path",
+        dest="strategy_output_path",
+        default="Simulations/CoinSelectionMatrix",
+        help=(
+            "root directory for RAG and BnB output "
+            "(default: Simulations/CoinSelectionMatrix)"
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -938,7 +1110,7 @@ def parseCommandLineArguments(arguments=None):
 
 
 def main(arguments=None):
-    """Execute the six-run beta-adjustment experiment matrix."""
+    """Execute the Boltzmann beta matrix and beta-independent strategy grid."""
     commandLineArguments = parseCommandLineArguments(arguments)
     tokens = [10**i for i in range(-2, 10)]
     global tokenDenominationBuckets
@@ -965,12 +1137,14 @@ def main(arguments=None):
     # print("Generated Dirichlet payments via Dirichlet distribution:", safeFloats)
     # print("Exp. value of Dirichlet payments:", np.mean(safeFloats), "+-", np.std(safeFloats))
 
-    runBetaAdjustmentExperimentMatrix(
+    runCoinSelectionExperimentGrid(
         tokenDenominationBuckets,
-        outputRoot='Simulations/BetaAdjustmentMatrix',
-        numSimulations=100,
+        betaOutputRoot=commandLineArguments.beta_output_path,
+        strategyOutputRoot=commandLineArguments.strategy_output_path,
+        numSimulations=commandLineArguments.num_runs,
         noPayments=commandLineArguments.num_iter,
         seed=commandLineArguments.seed,
+        strategies=commandLineArguments.strategies,
     )
 
 

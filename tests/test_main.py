@@ -1,4 +1,5 @@
 import argparse
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,19 @@ class MainTests(unittest.TestCase):
     def test_cli_defaults_to_one_hundred_payments(self):
         defaultArguments = main.parseCommandLineArguments([])
         self.assertEqual(defaultArguments.num_iter, 100)
+        self.assertEqual(defaultArguments.num_runs, 100)
+        self.assertEqual(
+            defaultArguments.strategies,
+            ("boltzmann", "rag_fit", "branch_and_bound"),
+        )
+        self.assertEqual(
+            defaultArguments.beta_output_path,
+            "Simulations/BetaAdjustmentMatrix",
+        )
+        self.assertEqual(
+            defaultArguments.strategy_output_path,
+            "Simulations/CoinSelectionMatrix",
+        )
         self.assertIsNone(defaultArguments.seed)
         self.assertEqual(
             main.parseCommandLineArguments(["--num_iter", "250"]).num_iter,
@@ -20,6 +34,21 @@ class MainTests(unittest.TestCase):
             main.parseCommandLineArguments(["--seed", "12345"]).seed,
             12345,
         )
+        self.assertEqual(
+            main.parseCommandLineArguments(["--num-runs", "7"]).num_runs,
+            7,
+        )
+        selectedArguments = main.parseCommandLineArguments(
+            [
+                "--strategies", "rag_fit", "branch_and_bound",
+                "--strategy-output-path", "new-results",
+            ]
+        )
+        self.assertEqual(
+            selectedArguments.strategies,
+            ["rag_fit", "branch_and_bound"],
+        )
+        self.assertEqual(selectedArguments.strategy_output_path, "new-results")
 
     def test_cli_rejects_invalid_payment_counts(self):
         for value in ("0", "-10", "11"):
@@ -30,6 +59,12 @@ class MainTests(unittest.TestCase):
     def test_cli_rejects_negative_seed(self):
         with self.assertRaises(argparse.ArgumentTypeError):
             main.randomSeed("-1")
+
+    def test_cli_rejects_invalid_run_counts(self):
+        for value in ("0", "-1"):
+            with self.subTest(value=value):
+                with self.assertRaises(argparse.ArgumentTypeError):
+                    main.positiveInteger(value)
 
     def test_run_seeds_pair_transactions_across_beta_modes(self):
         legacySeeds = main.deriveRunSeeds(123, "gaussian", "legacy", 4)
@@ -82,6 +117,103 @@ class MainTests(unittest.TestCase):
             },
         )
 
+    def test_coin_selection_grid_contains_all_requested_strategies(self):
+        configurations = main.getCoinSelectionExperimentConfigurations()
+
+        self.assertEqual(
+            [item["coinSelectionStrategy"] for item in configurations],
+            ["boltzmann", "rag", "branchAndBound"],
+        )
+        self.assertEqual(configurations[1]["variant"], "fit")
+
+        workloads = main.getCoinSelectionWorkloadConfigurations()
+        self.assertEqual(
+            [item["directoryName"] for item in workloads],
+            ["Gaussian", "DirichletFloat"],
+        )
+
+    @patch("main.runBetaAdjustmentExperiment")
+    @patch("main.runBetaAdjustmentExperimentMatrix")
+    def test_coin_selection_grid_uses_separate_strategy_directories(
+        self, betaMatrix, strategyExperiment
+    ):
+        betaMatrix.return_value = ["beta-results"]
+        strategyExperiment.side_effect = (
+            lambda outputRoot, configuration, *_args, **_kwargs:
+            os.path.join(outputRoot, configuration["directoryName"])
+        )
+
+        directories = main.runCoinSelectionExperimentGrid(
+            [0.01, 1.0],
+            betaOutputRoot="beta-results",
+            strategyOutputRoot="strategy-results",
+            numSimulations=2,
+            noPayments=10,
+            seed=123,
+        )
+
+        self.assertEqual(
+            directories,
+            [
+                "beta-results",
+                os.path.join("strategy-results", "RAGFit", "Gaussian"),
+                os.path.join("strategy-results", "RAGFit", "DirichletFloat"),
+                os.path.join("strategy-results", "BranchAndBound", "Gaussian"),
+                os.path.join(
+                    "strategy-results", "BranchAndBound", "DirichletFloat"
+                ),
+            ],
+        )
+        betaMatrix.assert_called_once()
+        self.assertEqual(strategyExperiment.call_count, 4)
+        self.assertEqual(
+            [
+                call.kwargs["coinSelectionStrategy"]
+                for call in strategyExperiment.call_args_list
+            ],
+            ["rag", "rag", "branchAndBound", "branchAndBound"],
+        )
+        self.assertTrue(
+            all(
+                call.kwargs["adjustBeta"] is False
+                for call in strategyExperiment.call_args_list
+            )
+        )
+
+    @patch("main.runBetaAdjustmentExperiment")
+    @patch("main.runBetaAdjustmentExperimentMatrix")
+    def test_coin_selection_grid_can_run_only_new_strategies(
+        self, betaMatrix, strategyExperiment
+    ):
+        strategyExperiment.side_effect = (
+            lambda outputRoot, configuration, *_args, **_kwargs:
+            os.path.join(outputRoot, configuration["directoryName"])
+        )
+
+        directories = main.runCoinSelectionExperimentGrid(
+            [0.01, 1.0],
+            strategyOutputRoot="results",
+            strategies=("rag_fit", "branch_and_bound"),
+        )
+
+        self.assertEqual(
+            directories,
+            [
+                os.path.join("results", "RAGFit", "Gaussian"),
+                os.path.join("results", "RAGFit", "DirichletFloat"),
+                os.path.join("results", "BranchAndBound", "Gaussian"),
+                os.path.join("results", "BranchAndBound", "DirichletFloat"),
+            ],
+        )
+        betaMatrix.assert_not_called()
+        self.assertEqual(strategyExperiment.call_count, 4)
+
+    def test_coin_selection_grid_rejects_unknown_strategy(self):
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            main.runCoinSelectionExperimentGrid(
+                [0.01, 1.0], strategies=("unknown",)
+            )
+
     def test_payment_token_counts_exclude_deposits_and_initial_funding(self):
         counts = main.getPaymentTokenCounts(
             transactions=[-10.0, 5.0, -4.0],
@@ -112,6 +244,29 @@ class MainTests(unittest.TestCase):
                 (root / "indexed.dat").read_text(),
                 "0 3.0\n1 4.0\n",
             )
+
+    @patch("main.plt")
+    def test_aggregate_histograms_accept_single_value_files(self, plot):
+        with tempfile.TemporaryDirectory() as temporaryDirectory:
+            root = Path(temporaryDirectory)
+            dataDirectory = root / "Data"
+            globalDataDirectory = root / "DataGlobal"
+            dataDirectory.mkdir()
+            globalDataDirectory.mkdir()
+            (dataDirectory / "total_transactions.dat").write_text("1.0\n")
+            (dataDirectory / "total_token_values_.dat").write_text("2.0\n")
+
+            main.saveAggregateHistograms(dataDirectory, globalDataDirectory)
+
+        self.assertEqual(len(plot.hist.call_args_list), 2)
+        self.assertEqual(
+            plot.hist.call_args_list[0].args[0].tolist(),
+            [1.0],
+        )
+        self.assertEqual(
+            plot.hist.call_args_list[1].args[0].tolist(),
+            [2.0],
+        )
 
     @patch("main.generateDoubleGaussianTransactionsAndPlotThem")
     def test_gaussian_scenario_dispatches_to_generator(self, generator):
