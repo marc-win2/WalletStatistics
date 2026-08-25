@@ -34,9 +34,16 @@ def countDataRows(filePath):
         return sum(1 for line in dataFile if line.strip())
 
 
+def loadDataValues(filePath):
+    """Load a one-value-per-line file, accepting a legitimate empty file."""
+    if os.path.getsize(filePath) == 0:
+        return np.array([], dtype=float)
+    return np.atleast_1d(np.genfromtxt(filePath, dtype=float))
+
+
 def inferPaymentCount(dataPath, numSimulations):
-    """Infer and validate the payment count across all requested runs."""
-    expectedCount = None
+    """Infer the common payment-history length across requested runs."""
+    paymentCounts = []
     for simulationIndex in range(numSimulations):
         filePath = os.path.join(
             dataPath,
@@ -45,15 +52,17 @@ def inferPaymentCount(dataPath, numSimulations):
         paymentCount = countDataRows(filePath)
         if paymentCount <= 0:
             raise ValueError(f"Payment data file is empty: {filePath}")
-        if expectedCount is None:
-            expectedCount = paymentCount
-        elif paymentCount != expectedCount:
-            raise ValueError(
-                "Inconsistent payment data length: "
-                f"{filePath} contains {paymentCount} rows; "
-                f"expected {expectedCount}."
-            )
-    return expectedCount
+        paymentCounts.append(paymentCount)
+
+    commonCount = min(paymentCounts)
+    maximumCount = max(paymentCounts)
+    if commonCount != maximumCount:
+        print(
+            "Payment histories have different lengths "
+            f"({commonCount} to {maximumCount} rows); averaging their common "
+            f"prefix of {commonCount} payments."
+        )
+    return commonCount
 
 
 def parseCommandLineArguments(arguments=None):
@@ -183,7 +192,12 @@ if __name__ == "__main__":
     for simIndex in np.arange(numSimulations):
 
         # Load the token values for each simulation
-        tokenValues = np.genfromtxt(os.path.join(dataPath, "token_values_" + str(simIndex) + ".dat"), dtype=float)
+        tokenValues = loadDataValues(
+            os.path.join(
+                dataPath,
+                "token_values_" + str(simIndex) + ".dat",
+            )
+        )
 
         extendWithValues(allTokenValues, tokenValues)
     maxTokens = np.genfromtxt(os.path.join(savePath, "total_max_token_vals.dat"), dtype=float)

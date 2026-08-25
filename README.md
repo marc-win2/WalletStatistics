@@ -113,24 +113,26 @@ python3 -m pip install -r requirements.txt
 
 ## Running a simulation
 
-The following example runs one small Gaussian simulation using the legacy beta
-adjustment and writes its results to `DemoData/` and `DemoDataGlobal/`:
+Running `main.py` without a mode option executes one Gaussian Boltzmann
+simulation with 100 configured payments and legacy beta adjustment. Results are
+written below `Simulations/SingleSimulation/`:
 
 ```bash
-python3 - <<'PY'
-from main import runStandaloneSimulationExperiment
+python3 main.py
+```
 
-token_buckets = [10**i for i in range(-2, 10)]
-runStandaloneSimulationExperiment(
-    token_buckets,
-    dataDirectory="DemoData",
-    globalDataDirectory="DemoDataGlobal",
-    numSimulations=1,
-    noPayments=100,
-    transactionScenario="gaussian",
-    betaAdjustmentMode="legacy",
-)
-PY
+The strategy, workload, output path, and strategy-specific settings can be
+selected from the command line. For example, this runs one reproducible RAG Fit
+simulation:
+
+```bash
+python3 main.py \
+  --coin-selection-strategy rag \
+  --rag-variant fit \
+  --transaction-scenario gaussian \
+  --num_iter 100000 \
+  --output-path Simulations/RAGFitSingle \
+  --seed 12345
 ```
 
 The two experiment workloads are:
@@ -142,17 +144,17 @@ The two experiment workloads are:
 The integer multinomial/Dirichlet generator remains available in the source but
 is not part of the standard experiment matrix.
 
-Running `python3 main.py` starts the complete experiment set. Boltzmann crosses
-the three beta modes with both workloads. Because RAG Fit and Branch-and-Bound
-do not use beta for coin selection, each of them runs the two workloads only
-once with dynamic beta adjustment disabled. By default, every configuration
-contains 100 independent runs and 100 payments per run. Change these dimensions
+Pass `--matrix` to run the complete experiment set. Boltzmann crosses the three
+beta modes with both workloads. Because RAG Fit and Branch-and-Bound do not use
+beta for coin selection, each of them runs the two workloads only once with
+dynamic beta adjustment disabled. Matrix configurations default to 100
+independent runs and 100 configured payments per run. Change these dimensions
 with `--num_runs` and `--num_iter`; the payment count must be positive and
 divisible by 10 because the Dirichlet workload generates payments in groups of
 ten:
 
 ```bash
-python3 main.py --num_runs 100 --num_iter 100000
+python3 main.py --matrix --num_runs 100 --num_iter 100000
 ```
 
 Use `--strategies` to run only selected strategies. For example, this adds the
@@ -161,6 +163,7 @@ matrix:
 
 ```bash
 python3 main.py \
+  --matrix \
   --strategies rag_fit branch_and_bound \
   --num_runs 100 \
   --num_iter 100000 \
@@ -172,6 +175,7 @@ different root:
 
 ```bash
 python3 main.py \
+  --matrix \
   --strategies rag_fit branch_and_bound \
   --strategy_output_path Simulations/CoinSelectionGrid \
   --num_runs 100 \
@@ -183,7 +187,7 @@ Runs are nondeterministic by default, as before. To reproduce a complete
 experiment matrix, provide one non-negative root seed:
 
 ```bash
-python3 main.py --num_iter 100000 --seed 12345
+python3 main.py --matrix --num_iter 100000 --seed 12345
 ```
 
 The root seed is deterministically split into independent random streams for
@@ -237,9 +241,15 @@ repository.
 `averageSimulationPlots.py` averages histories and final token values across
 simulation runs. By default it reads `./Data`, writes `./DataGlobal`, aggregates
 100 runs, and processes histories in chunks of 20,000 rows. It infers the
-payment count from the generated `payment_token_count_*.dat` files and verifies
-that all requested runs have the same length. Chunking limits peak memory
+payment count from the generated `payment_token_count_*.dat` files. If runs
+have different payment counts, it averages their common prefix up to the
+shortest run and reports the observed length range. Chunking limits peak memory
 without changing the calculated means or standard deviations.
+
+Per-run `token_values_*.dat` files intentionally omit the largest final token,
+which is stored separately in `total_max_token_vals.dat`. A file can therefore
+be empty when the final wallet contains only that largest token; the averaging
+script treats this as a valid result.
 
 ```bash
 python3 averageSimulationPlots.py

@@ -9,10 +9,17 @@ import main
 
 
 class MainTests(unittest.TestCase):
-    def test_cli_defaults_to_one_hundred_payments(self):
+    def test_cli_defaults_to_one_single_boltzmann_simulation(self):
         defaultArguments = main.parseCommandLineArguments([])
         self.assertEqual(defaultArguments.num_iter, 100)
-        self.assertEqual(defaultArguments.num_runs, 100)
+        self.assertEqual(defaultArguments.num_runs, 1)
+        self.assertFalse(defaultArguments.matrix)
+        self.assertEqual(defaultArguments.coin_selection_strategy, "boltzmann")
+        self.assertEqual(defaultArguments.transaction_scenario, "gaussian")
+        self.assertEqual(
+            defaultArguments.output_path,
+            "Simulations/SingleSimulation",
+        )
         self.assertEqual(
             defaultArguments.strategies,
             ("boltzmann", "rag_fit", "branch_and_bound"),
@@ -49,6 +56,69 @@ class MainTests(unittest.TestCase):
             ["rag_fit", "branch_and_bound"],
         )
         self.assertEqual(selectedArguments.strategy_output_path, "new-results")
+
+    def test_matrix_mode_defaults_to_one_hundred_runs(self):
+        matrixArguments = main.parseCommandLineArguments(["--matrix"])
+
+        self.assertTrue(matrixArguments.matrix)
+        self.assertEqual(matrixArguments.num_runs, 100)
+
+    def test_single_simulation_options_are_configurable(self):
+        arguments = main.parseCommandLineArguments(
+            [
+                "--coin-selection-strategy", "rag",
+                "--transaction-scenario", "dirichletFloat",
+                "--rag-probability", "0.4",
+                "--rag-target-pool-size", "25",
+                "--rag-variant", "largest_first",
+                "--output-path", "single-results",
+            ]
+        )
+
+        self.assertEqual(arguments.coin_selection_strategy, "rag")
+        self.assertEqual(arguments.transaction_scenario, "dirichletFloat")
+        self.assertEqual(arguments.rag_probability, 0.4)
+        self.assertEqual(arguments.rag_target_pool_size, 25)
+        self.assertEqual(arguments.rag_variant, "largest_first")
+        self.assertEqual(arguments.output_path, "single-results")
+
+    @patch("main.os.makedirs")
+    @patch("main.runStandaloneSimulationExperiment")
+    @patch("main.runCoinSelectionExperimentGrid")
+    def test_main_runs_one_simulation_by_default(
+        self, experimentGrid, standaloneExperiment, makeDirectories
+    ):
+        main.main(
+            [
+                "--coin-selection-strategy", "branch_and_bound",
+                "--num_iter", "10",
+                "--output-path", "single-results",
+            ]
+        )
+
+        experimentGrid.assert_not_called()
+        makeDirectories.assert_called_once_with("single-results", exist_ok=True)
+        standaloneExperiment.assert_called_once()
+        self.assertEqual(standaloneExperiment.call_args.kwargs["numSimulations"], 1)
+        self.assertEqual(
+            standaloneExperiment.call_args.kwargs["coinSelectionStrategy"],
+            "branchAndBound",
+        )
+        self.assertFalse(standaloneExperiment.call_args.kwargs["adjustBeta"])
+
+    @patch("main.os.makedirs")
+    @patch("main.runStandaloneSimulationExperiment")
+    @patch("main.runCoinSelectionExperimentGrid")
+    def test_main_runs_matrix_only_with_explicit_option(
+        self, experimentGrid, standaloneExperiment, makeDirectories
+    ):
+        main.main(["--matrix", "--strategies", "rag_fit", "--num_iter", "10"])
+
+        standaloneExperiment.assert_not_called()
+        makeDirectories.assert_not_called()
+        experimentGrid.assert_called_once()
+        self.assertEqual(experimentGrid.call_args.kwargs["numSimulations"], 100)
+        self.assertEqual(experimentGrid.call_args.kwargs["strategies"], ["rag_fit"])
 
     def test_cli_rejects_invalid_payment_counts(self):
         for value in ("0", "-10", "11"):

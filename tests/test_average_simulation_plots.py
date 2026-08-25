@@ -8,6 +8,7 @@ import numpy as np
 from averageSimulationPlots import (
     inferPaymentCount,
     extendWithValues,
+    loadDataValues,
     meanAndStd,
     parseCommandLineArguments,
     positiveInteger,
@@ -27,6 +28,18 @@ class AverageSimulationPlotsTests(unittest.TestCase):
         extendWithValues(values, np.array(3.0))
 
         self.assertEqual(values, [1.0, 2.0, 3.0])
+
+    def test_data_loader_accepts_empty_and_single_value_files(self):
+        with tempfile.TemporaryDirectory() as dataPath:
+            emptyPath = os.path.join(dataPath, "empty.dat")
+            singlePath = os.path.join(dataPath, "single.dat")
+            with open(emptyPath, "w", encoding="utf-8"):
+                pass
+            with open(singlePath, "w", encoding="utf-8") as dataFile:
+                dataFile.write("3.5\n")
+
+            self.assertEqual(loadDataValues(emptyPath).tolist(), [])
+            self.assertEqual(loadDataValues(singlePath).tolist(), [3.5])
 
     def test_command_line_defaults_match_standard_analysis(self):
         arguments = parseCommandLineArguments([])
@@ -68,7 +81,7 @@ class AverageSimulationPlotsTests(unittest.TestCase):
 
             self.assertEqual(inferPaymentCount(dataPath, 2), 3)
 
-    def test_inconsistent_payment_counts_are_rejected(self):
+    def test_different_payment_counts_use_the_shortest_common_history(self):
         with tempfile.TemporaryDirectory() as dataPath:
             for simulationIndex, values in enumerate(("1\n2\n", "1\n")):
                 filePath = os.path.join(
@@ -77,8 +90,7 @@ class AverageSimulationPlotsTests(unittest.TestCase):
                 with open(filePath, "w", encoding="utf-8") as dataFile:
                     dataFile.write(values)
 
-            with self.assertRaisesRegex(ValueError, "Inconsistent payment"):
-                inferPaymentCount(dataPath, 2)
+            self.assertEqual(inferPaymentCount(dataPath, 2), 1)
 
 
 if __name__ == "__main__":

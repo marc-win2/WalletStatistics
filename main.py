@@ -1046,11 +1046,20 @@ def randomSeed(value):
 
 
 def parseCommandLineArguments(arguments=None):
-    """Parse command-line options for the experiment matrix."""
+    """Parse command-line options for a single run or experiment matrix."""
     parser = argparse.ArgumentParser(
         description=(
-            "Run the Boltzmann, RAG Fit, and Branch-and-Bound experiment grid."
+            "Run one wallet simulation by default, or an experiment matrix "
+            "with --matrix."
         )
+    )
+    parser.add_argument(
+        "--matrix",
+        action="store_true",
+        help=(
+            "run the Boltzmann beta-adjustment matrix and selected "
+            "beta-independent strategy grids instead of one simulation"
+        ),
     )
     parser.add_argument(
         "--num_iter",
@@ -1063,8 +1072,11 @@ def parseCommandLineArguments(arguments=None):
         "--num-runs",
         dest="num_runs",
         type=positiveInteger,
-        default=100,
-        help="number of simulation runs per configuration (default: 100)",
+        default=None,
+        help=(
+            "runs per configuration (default: 1 for a single simulation, "
+            "100 with --matrix)"
+        ),
     )
     strategyNames = tuple(
         configuration['name']
@@ -1078,6 +1090,62 @@ def parseCommandLineArguments(arguments=None):
         help=(
             "coin-selection strategies to run (default: boltzmann rag_fit "
             "branch_and_bound)"
+        ),
+    )
+    parser.add_argument(
+        "--coin-selection-strategy",
+        choices=("boltzmann", "greedy", "branch_and_bound", "rag"),
+        default="boltzmann",
+        help="strategy for the default single-simulation mode",
+    )
+    parser.add_argument(
+        "--transaction-scenario",
+        choices=("gaussian", "dirichletFloat"),
+        default="gaussian",
+        help="transaction workload for the default single-simulation mode",
+    )
+    parser.add_argument(
+        "--beta-adjustment-mode",
+        choices=("legacy", "microcanonicalExact", "microcanonicalApprox"),
+        default="legacy",
+        help="beta update used by a single Boltzmann simulation",
+    )
+    parser.add_argument(
+        "--sampling-mode",
+        choices=("token", "bucketLegacy"),
+        default="token",
+        help="Boltzmann sampling mode for a single simulation",
+    )
+    parser.add_argument(
+        "--max-bnb-overshoot",
+        type=float,
+        default=None,
+        help="optional absolute BnB overshoot cap for a single simulation",
+    )
+    parser.add_argument(
+        "--rag-probability",
+        type=float,
+        default=0.5,
+        help="RAG candidate-selection probability (default: 0.5)",
+    )
+    parser.add_argument(
+        "--rag-target-pool-size",
+        type=int,
+        default=20,
+        help="RAG adaptive target pool size (default: 20)",
+    )
+    parser.add_argument(
+        "--rag-variant",
+        choices=("fit", "largest_first", "smallest_first_consolidate"),
+        default="fit",
+        help="RAG candidate ordering (default: fit)",
+    )
+    parser.add_argument(
+        "--output-path",
+        default="Simulations/SingleSimulation",
+        help=(
+            "output root for single-simulation Data/ and DataGlobal/ "
+            "directories (default: Simulations/SingleSimulation)"
         ),
     )
     parser.add_argument(
@@ -1106,11 +1174,14 @@ def parseCommandLineArguments(arguments=None):
         default=None,
         help="optional root seed for reproducible simulations (default: random)",
     )
-    return parser.parse_args(arguments)
+    parsedArguments = parser.parse_args(arguments)
+    if parsedArguments.num_runs is None:
+        parsedArguments.num_runs = 100 if parsedArguments.matrix else 1
+    return parsedArguments
 
 
 def main(arguments=None):
-    """Execute the Boltzmann beta matrix and beta-independent strategy grid."""
+    """Execute one simulation by default or the explicit experiment matrix."""
     commandLineArguments = parseCommandLineArguments(arguments)
     tokens = [10**i for i in range(-2, 10)]
     global tokenDenominationBuckets
@@ -1137,14 +1208,39 @@ def main(arguments=None):
     # print("Generated Dirichlet payments via Dirichlet distribution:", safeFloats)
     # print("Exp. value of Dirichlet payments:", np.mean(safeFloats), "+-", np.std(safeFloats))
 
-    runCoinSelectionExperimentGrid(
+    if commandLineArguments.matrix:
+        return runCoinSelectionExperimentGrid(
+            tokenDenominationBuckets,
+            betaOutputRoot=commandLineArguments.beta_output_path,
+            strategyOutputRoot=commandLineArguments.strategy_output_path,
+            numSimulations=commandLineArguments.num_runs,
+            noPayments=commandLineArguments.num_iter,
+            seed=commandLineArguments.seed,
+            strategies=commandLineArguments.strategies,
+        )
+
+    os.makedirs(commandLineArguments.output_path, exist_ok=True)
+    singleStrategy = commandLineArguments.coin_selection_strategy
+    if singleStrategy == "branch_and_bound":
+        singleStrategy = "branchAndBound"
+    return runStandaloneSimulationExperiment(
         tokenDenominationBuckets,
-        betaOutputRoot=commandLineArguments.beta_output_path,
-        strategyOutputRoot=commandLineArguments.strategy_output_path,
+        dataDirectory=os.path.join(commandLineArguments.output_path, "Data"),
+        globalDataDirectory=os.path.join(
+            commandLineArguments.output_path, "DataGlobal"
+        ),
         numSimulations=commandLineArguments.num_runs,
         noPayments=commandLineArguments.num_iter,
+        transactionScenario=commandLineArguments.transaction_scenario,
+        betaAdjustmentMode=commandLineArguments.beta_adjustment_mode,
         seed=commandLineArguments.seed,
-        strategies=commandLineArguments.strategies,
+        coinSelectionStrategy=singleStrategy,
+        samplingMode=commandLineArguments.sampling_mode,
+        max_bnb_overshoot=commandLineArguments.max_bnb_overshoot,
+        probability=commandLineArguments.rag_probability,
+        target_pool_size=commandLineArguments.rag_target_pool_size,
+        variant=commandLineArguments.rag_variant,
+        adjustBeta=singleStrategy == "boltzmann",
     )
 
 
