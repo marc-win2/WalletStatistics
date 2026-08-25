@@ -5,7 +5,6 @@ set -euo pipefail
 script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 matrix_path="$script_directory/Simulations/CoinSelectionMatrix"
 num_runs=100
-num_payments=100000
 chunk_size=20000
 python_command="${PYTHON_BIN:-python3}"
 configuration_paths=()
@@ -22,7 +21,6 @@ Options:
   --configuration PATH    Configuration directory, repeatable; relative paths
                           are resolved below --matrix-path
   --num-runs NUMBER        Runs generated per configuration (default: 100)
-  --num-payments NUMBER    Payments generated per run (default: 100000)
   --chunk-size NUMBER      Rows processed per chunk (default: 20000)
   -h, --help               Show this help
 
@@ -60,11 +58,6 @@ while [[ $# -gt 0 ]]; do
         --num-runs)
             require_value "$@"
             num_runs="$2"
-            shift 2
-            ;;
-        --num-payments)
-            require_value "$@"
-            num_payments="$2"
             shift 2
             ;;
         --chunk-size)
@@ -127,7 +120,6 @@ for configuration_path in "${configurations[@]}"; do
     echo "Averaging $configuration_path"
     "$python_command" "$script_directory/averageSimulationPlots.py" \
         --num_runs "$num_runs" \
-        --num_payments "$num_payments" \
         --chunk_size "$chunk_size" \
         --data_path "$data_path" \
         --save_path "$save_path"

@@ -55,7 +55,7 @@ class SelectionPlan:
     all strategy arithmetic is performed in integer cents. ``changeless`` is
     retained as common strategy metadata, but the strategies implemented here
     all use ordinary-change semantics. ``bnb_fallback_used`` distinguishes a
-    successful BnB search from its largest-first fallback.
+    successful BnB search from its largest-fitting Greedy fallback.
     """
 
     inputs: Tuple[Token, ...]
@@ -171,7 +171,7 @@ def plan_greedy_selection(
 
 
 class BranchAndBoundStrategy(CoinSelectionStrategy):
-    """Inclusion-first subset search with a largest-first safety fallback.
+    """Inclusion-first subset search with a largest-fitting Greedy fallback.
 
     When no absolute overshoot is configured, the search accepts up to 20%
     of the current payment amount as change.
@@ -293,12 +293,27 @@ class BranchAndBoundStrategy(CoinSelectionStrategy):
         )
 
     def _fallback(self, ordered_tokens, payment_cents: int) -> SelectionPlan:
-        """Select unconditional largest-first inputs until the payment is met."""
+        """Apply Greedy: largest fitting first, then smallest unused UTXO."""
         selected = []
         selected_total_cents = 0
+        rejected = []
+
         for token, value_cents in ordered_tokens:
             if selected_total_cents >= payment_cents:
                 break
+
+            remaining_cents = payment_cents - selected_total_cents
+            if value_cents <= remaining_cents:
+                selected.append(token)
+                selected_total_cents += value_cents
+            else:
+                rejected.append((token, value_cents))
+
+        if selected_total_cents < payment_cents and rejected:
+            # ``ordered_tokens`` is descending and stable, but min() makes the
+            # survey's smallest-unused-UTXO fallback explicit and preserves
+            # caller order when denominations are equal.
+            token, value_cents = min(rejected, key=lambda item: item[1])
             selected.append(token)
             selected_total_cents += value_cents
 

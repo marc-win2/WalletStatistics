@@ -160,12 +160,26 @@ class BranchAndBoundStrategyTests(unittest.TestCase):
         self.assertTrue(plan.bnb_fallback_used)
 
     def test_more_than_one_hundred_eighty_tokens_uses_fallback(self):
-        tokens = [Token(10.00, 1)] + [Token(1.00, serialno) for serialno in range(2, 182)]
+        tokens = [Token(10.00, 1)] + [
+            Token(1.00, serialno) for serialno in range(2, 182)
+        ]
 
         plan = plan_branch_and_bound_selection(tokens, 9.00)
 
-        self.assertEqual(plan.inputs, (tokens[0],))
-        self.assertEqual(plan.change, 1.00)
+        self.assertEqual(plan.inputs, tuple(tokens[1:10]))
+        self.assertEqual(plan.change, 0.00)
+        self.assertEqual(plan.strategy, "branch_and_bound_fallback")
+        self.assertTrue(plan.bnb_fallback_used)
+
+    def test_fallback_uses_smallest_input_only_for_unavoidable_overshoot(self):
+        tokens = [Token(12.00, 1), Token(11.00, 2), Token(4.00, 3)]
+
+        with patch.object(BranchAndBoundStrategy, "MAX_SEARCH_ATTEMPTS", 0):
+            plan = plan_branch_and_bound_selection(tokens, 10.00)
+
+        self.assertEqual(plan.inputs, (tokens[2], tokens[1]))
+        self.assertEqual(plan.selected_total, 15.00)
+        self.assertEqual(plan.change, 5.00)
         self.assertTrue(plan.bnb_fallback_used)
 
     def test_exactly_one_hundred_eighty_tokens_remains_eligible_for_bnb(self):

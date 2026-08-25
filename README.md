@@ -87,8 +87,10 @@ successful payment-level selection.
 `branchAndBound` accepts an absolute `max_bnb_overshoot`. When it is left at
 `None`, the search permits an overshoot of up to 20% of the current payment
 amount; accepted overshoot produces normal change. Its search expands at most
-800 nodes per payment and uses the largest-first fallback when the wallet
-contains more than 180 tokens. `rag` accepts `probability`,
+800 nodes per payment and uses the survey's largest-fitting Greedy fallback
+when the search is exhausted or the wallet contains more than 180 tokens. This
+fallback selects the largest UTXOs that fit the remainder and uses the smallest
+remaining UTXO only when overshoot is unavoidable. `rag` accepts `probability`,
 `target_pool_size`, and `variant` (`"fit"` by default, `"largest_first"`, or
 `"smallest_first_consolidate"`). Each candidate UTXO is independently accepted
 with a selection probability that defaults to 0.5. As in Schneider's modified
@@ -234,21 +236,20 @@ repository.
 
 `averageSimulationPlots.py` averages histories and final token values across
 simulation runs. By default it reads `./Data`, writes `./DataGlobal`, aggregates
-100 runs with 100,000 payments each, and processes histories in chunks of 20,000
-rows. Chunking limits peak memory without changing the calculated means or
-standard deviations.
+100 runs, and processes histories in chunks of 20,000 rows. It infers the
+payment count from the generated `payment_token_count_*.dat` files and verifies
+that all requested runs have the same length. Chunking limits peak memory
+without changing the calculated means or standard deviations.
 
 ```bash
 python3 averageSimulationPlots.py
 ```
 
-Paths, run counts, payment counts, and chunk size can be changed from the
-command line:
+Paths, run counts, and chunk size can be changed from the command line:
 
 ```bash
 python3 averageSimulationPlots.py \
   --num_runs 10 \
-  --num_payments 1000 \
   --chunk_size 500 \
   --data_path Simulations/example/Data \
   --save_path Simulations/example/DataGlobal
@@ -260,24 +261,22 @@ configurations with the wrapper script:
 ```bash
 ./averageSimulationMatrix.sh \
   --num-runs 100 \
-  --num-payments 100000 \
   --chunk-size 20000
 ```
 
 Use `--matrix-path` if `main.py` was run with a custom
-`--strategy_output_path`. The run and payment counts must match the values used
-for `main.py`. The script discovers every configuration containing a `Data/`
-directory below that path, independently of its strategy name. To process only
-specific configurations, repeat `--configuration` with a relative or absolute
-configuration path:
+`--strategy_output_path`. The run count must match the value used for `main.py`;
+the payment count is detected automatically. The script discovers every
+configuration containing a `Data/` directory below that path, independently of
+its strategy name. To process only specific configurations, repeat
+`--configuration` with a relative or absolute configuration path:
 
 ```bash
 ./averageSimulationMatrix.sh \
   --matrix-path Simulations/CoinSelectionMatrix \
   --configuration RAGFit/Gaussian \
   --configuration BranchAndBound/DirichletFloat \
-  --num-runs 100 \
-  --num-payments 100000
+  --num-runs 100
 ```
 
 ### Comparing beta-adjustment modes

@@ -1,9 +1,12 @@
 import argparse
+import os
+import tempfile
 import unittest
 
 import numpy as np
 
 from averageSimulationPlots import (
+    inferPaymentCount,
     extendWithValues,
     meanAndStd,
     parseCommandLineArguments,
@@ -29,7 +32,6 @@ class AverageSimulationPlotsTests(unittest.TestCase):
         arguments = parseCommandLineArguments([])
 
         self.assertEqual(arguments.num_runs, 100)
-        self.assertEqual(arguments.num_payments, 100000)
         self.assertEqual(arguments.chunk_size, 20000)
         self.assertEqual(arguments.data_path, "./Data")
         self.assertEqual(arguments.save_path, "./DataGlobal")
@@ -38,7 +40,6 @@ class AverageSimulationPlotsTests(unittest.TestCase):
         arguments = parseCommandLineArguments(
             [
                 "--num_runs", "2",
-                "--num_payments", "30",
                 "--chunk_size", "7",
                 "--data_path", "input",
                 "--save_path", "output",
@@ -46,7 +47,6 @@ class AverageSimulationPlotsTests(unittest.TestCase):
         )
 
         self.assertEqual(arguments.num_runs, 2)
-        self.assertEqual(arguments.num_payments, 30)
         self.assertEqual(arguments.chunk_size, 7)
         self.assertEqual(arguments.data_path, "input")
         self.assertEqual(arguments.save_path, "output")
@@ -56,6 +56,29 @@ class AverageSimulationPlotsTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(argparse.ArgumentTypeError):
                     positiveInteger(value)
+
+    def test_payment_count_is_inferred_from_all_requested_runs(self):
+        with tempfile.TemporaryDirectory() as dataPath:
+            for simulationIndex in range(2):
+                filePath = os.path.join(
+                    dataPath, f"payment_token_count_{simulationIndex}.dat"
+                )
+                with open(filePath, "w", encoding="utf-8") as dataFile:
+                    dataFile.write("1\n2\n3\n")
+
+            self.assertEqual(inferPaymentCount(dataPath, 2), 3)
+
+    def test_inconsistent_payment_counts_are_rejected(self):
+        with tempfile.TemporaryDirectory() as dataPath:
+            for simulationIndex, values in enumerate(("1\n2\n", "1\n")):
+                filePath = os.path.join(
+                    dataPath, f"payment_token_count_{simulationIndex}.dat"
+                )
+                with open(filePath, "w", encoding="utf-8") as dataFile:
+                    dataFile.write(values)
+
+            with self.assertRaisesRegex(ValueError, "Inconsistent payment"):
+                inferPaymentCount(dataPath, 2)
 
 
 if __name__ == "__main__":

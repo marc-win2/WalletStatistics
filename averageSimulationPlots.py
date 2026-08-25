@@ -28,6 +28,34 @@ def positiveInteger(value):
     return integerValue
 
 
+def countDataRows(filePath):
+    """Count non-empty rows in a generated one-value-per-line data file."""
+    with open(filePath, "r", encoding="utf-8") as dataFile:
+        return sum(1 for line in dataFile if line.strip())
+
+
+def inferPaymentCount(dataPath, numSimulations):
+    """Infer and validate the payment count across all requested runs."""
+    expectedCount = None
+    for simulationIndex in range(numSimulations):
+        filePath = os.path.join(
+            dataPath,
+            "payment_token_count_" + str(simulationIndex) + ".dat",
+        )
+        paymentCount = countDataRows(filePath)
+        if paymentCount <= 0:
+            raise ValueError(f"Payment data file is empty: {filePath}")
+        if expectedCount is None:
+            expectedCount = paymentCount
+        elif paymentCount != expectedCount:
+            raise ValueError(
+                "Inconsistent payment data length: "
+                f"{filePath} contains {paymentCount} rows; "
+                f"expected {expectedCount}."
+            )
+    return expectedCount
+
+
 def parseCommandLineArguments(arguments=None):
     """Parse configuration for aggregating simulation output."""
     parser = argparse.ArgumentParser(
@@ -40,14 +68,6 @@ def parseCommandLineArguments(arguments=None):
         type=positiveInteger,
         default=100,
         help="number of simulation runs to aggregate (default: 100)",
-    )
-    parser.add_argument(
-        "--num_payments",
-        "--num-payments",
-        dest="num_payments",
-        type=positiveInteger,
-        default=100000,
-        help="number of payments per run (default: 100000)",
     )
     parser.add_argument(
         "--chunk_size",
@@ -132,7 +152,7 @@ if __name__ == "__main__":
     tv_ = 0
     tT_ = 0
 
-    noPayments = commandLineArguments.num_payments
+    noPayments = inferPaymentCount(dataPath, numSimulations)
     print(noPayments, " payments in the simulation")
 
     avgPaymentTokenCounts = []
