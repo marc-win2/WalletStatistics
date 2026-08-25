@@ -159,8 +159,8 @@ class BranchAndBoundStrategyTests(unittest.TestCase):
         self.assertEqual(plan.strategy, "branch_and_bound_fallback")
         self.assertTrue(plan.bnb_fallback_used)
 
-    def test_more_than_two_thousand_tokens_uses_fallback(self):
-        tokens = [Token(10.00, 1)] + [Token(1.00, serialno) for serialno in range(2, 2002)]
+    def test_more_than_one_hundred_eighty_tokens_uses_fallback(self):
+        tokens = [Token(10.00, 1)] + [Token(1.00, serialno) for serialno in range(2, 182)]
 
         plan = plan_branch_and_bound_selection(tokens, 9.00)
 
@@ -168,8 +168,8 @@ class BranchAndBoundStrategyTests(unittest.TestCase):
         self.assertEqual(plan.change, 1.00)
         self.assertTrue(plan.bnb_fallback_used)
 
-    def test_exactly_two_thousand_tokens_remains_eligible_for_bnb(self):
-        tokens = [Token(10.00, 1)] + [Token(1.00, serialno) for serialno in range(2, 2001)]
+    def test_exactly_one_hundred_eighty_tokens_remains_eligible_for_bnb(self):
+        tokens = [Token(10.00, 1)] + [Token(1.00, serialno) for serialno in range(2, 181)]
 
         plan = plan_branch_and_bound_selection(tokens, 10.00)
 
@@ -255,6 +255,11 @@ class ConstantRng:
 
 
 class RandomizedAdaptiveGreedyTests(unittest.TestCase):
+    def test_defaults_probability_to_one_half(self):
+        strategy = RandomizedAdaptiveGreedyStrategy()
+
+        self.assertEqual(strategy.probability, 0.5)
+
     def test_rejects_invalid_probability(self):
         for probability in (float("nan"), float("inf"), -0.01, 1.01):
             with self.subTest(probability=probability):
@@ -272,6 +277,22 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
         self.assertEqual([token.sno for token in plan.inputs], [2, 3])
         self.assertEqual(plan.change, 0.00)
         self.assertEqual(plan.strategy, "rag_fit")
+
+    def test_default_target_pool_size_adapts_above_twenty_tokens(self):
+        tokens = [Token(6.00, 1), Token(4.00, 2), Token(0.50, 3)]
+        tokens.extend(Token(0.01, serialno) for serialno in range(4, 22))
+
+        plan = plan_randomized_adaptive_greedy_selection(
+            tokens,
+            10.00,
+            probability=1.0,
+            rng=ConstantRng(0.0),
+        )
+
+        # With 21 tokens, the default target is floor(10.00 * 21 / 20) = 10.50.
+        self.assertEqual([token.sno for token in plan.inputs], [1, 2, 3])
+        self.assertEqual(plan.selected_total, 10.50)
+        self.assertEqual(plan.change, 0.50)
 
     def test_probability_zero_uses_largest_first_safety_top_up(self):
         rng = ConstantRng(0.5)
@@ -403,7 +424,7 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
         self.assertEqual([token.sno for token in plan.inputs], [1, 2])
         self.assertEqual(plan.selected_total, 18.00)
 
-    def test_probability_is_checked_per_denomination_not_per_duplicate(self):
+    def test_probability_is_checked_independently_for_duplicate_tokens(self):
         rng = SequenceRng([0.9, 0.1])
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(5.00, 1), Token(5.00, 2), Token(3.00, 3)],
@@ -413,7 +434,8 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
             rng=rng,
         )
 
-        self.assertEqual([token.sno for token in plan.inputs], [3])
+        self.assertEqual([token.sno for token in plan.inputs], [2])
+        self.assertEqual(plan.change, 2.00)
         self.assertEqual(rng.calls, 2)
 
     def test_injected_rng_makes_selection_deterministic(self):

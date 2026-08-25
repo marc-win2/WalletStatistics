@@ -234,8 +234,8 @@ def singleSimulation(
     coinSelectionStrategy="boltzmann",
     samplingMode="token",
     max_bnb_overshoot=None,
-    probability=1.0,
-    target_pool_size=None,
+    probability=0.5,
+    target_pool_size=20,
     variant="fit",
 ):
     simulation = SimulationHandler(
@@ -546,8 +546,8 @@ def runSimulationBatch(
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
     max_bnb_overshoot=None,
-    probability=1.0,
-    target_pool_size=None,
+    probability=0.5,
+    target_pool_size=20,
     variant='fit',
     adjustBeta=True,
 ):
@@ -827,8 +827,8 @@ def runStandaloneSimulationExperiment(
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
     max_bnb_overshoot=None,
-    probability=1.0,
-    target_pool_size=None,
+    probability=0.5,
+    target_pool_size=20,
     variant='fit',
     adjustBeta=True,
 ):
@@ -869,8 +869,8 @@ def runBetaAdjustmentExperiment(
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
     max_bnb_overshoot=None,
-    probability=1.0,
-    target_pool_size=None,
+    probability=0.5,
+    target_pool_size=20,
     variant='fit',
     adjustBeta=True,
 ):
@@ -926,8 +926,8 @@ def runBetaAdjustmentExperimentMatrix(
     coinSelectionStrategy='boltzmann',
     samplingMode='token',
     max_bnb_overshoot=None,
-    probability=1.0,
-    target_pool_size=None,
+    probability=0.5,
+    target_pool_size=20,
     variant='fit',
 ):
     """Run all six workload/beta combinations in isolated directories."""

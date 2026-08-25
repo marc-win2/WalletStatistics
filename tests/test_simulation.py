@@ -256,7 +256,7 @@ class SimulationTests(unittest.TestCase):
 
     def test_branch_and_bound_fallback_is_observable(self):
         simulation = make_simulation(coinSelectionStrategy="branchAndBound")
-        set_wallet(simulation, [1.0] * 2001)
+        set_wallet(simulation, [1.0] * 181)
 
         simulation.handlePayment(-1.0)
 
@@ -286,11 +286,14 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(first.lastSelectionPlan.change, second.lastSelectionPlan.change)
 
     def test_rag_defaults_to_fit_variant(self):
+        defaultSimulation = make_simulation(coinSelectionStrategy="rag")
         simulation = make_simulation(coinSelectionStrategy="rag", probability=1.0)
         set_wallet(simulation, [12.0, 6.0, 4.0])
 
         simulation.handlePayment(-10.0)
 
+        self.assertEqual(defaultSimulation.rag_probability, 0.5)
+        self.assertEqual(simulation.rag_target_pool_size, 20)
         self.assertEqual(
             [token.value for token in simulation.lastSelectionPlan.inputs],
             [6.0, 4.0],

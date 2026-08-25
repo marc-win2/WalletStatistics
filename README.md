@@ -86,10 +86,16 @@ successful payment-level selection.
 
 `branchAndBound` accepts an absolute `max_bnb_overshoot`. When it is left at
 `None`, the search permits an overshoot of up to 20% of the current payment
-amount; accepted overshoot produces normal change. `rag` accepts `probability`,
+amount; accepted overshoot produces normal change. Its search expands at most
+800 nodes per payment and uses the largest-first fallback when the wallet
+contains more than 180 tokens. `rag` accepts `probability`,
 `target_pool_size`, and `variant` (`"fit"` by default, `"largest_first"`, or
-`"smallest_first_consolidate"`). A seeded simulation supplies its existing
-selection RNG to RAG, making its sequence reproducible.
+`"smallest_first_consolidate"`). Each candidate UTXO is independently accepted
+with a selection probability that defaults to 0.5. As in Schneider's modified
+Greedy experiment, its target pool size defaults to 20, so RAG adaptively raises
+its selection target once the wallet contains more than 20 tokens. A seeded
+simulation supplies its existing selection RNG to RAG, making its sequence
+reproducible.
 
 ## Installation
 

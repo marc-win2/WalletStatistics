@@ -48,8 +48,8 @@ class SimulationHandler:
         coinSelectionStrategy="boltzmann",
         samplingMode="token",
         max_bnb_overshoot=None,
-        probability=1.0,
-        target_pool_size=None,
+        probability=0.5,
+        target_pool_size=20,
         variant=RagVariant.Fit,
     ):
         self.setCoinSelectionStrategy(coinSelectionStrategy)

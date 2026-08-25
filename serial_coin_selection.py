@@ -180,8 +180,8 @@ class BranchAndBoundStrategy(CoinSelectionStrategy):
     name = "branch_and_bound"
     fallback_name = "branch_and_bound_fallback"
     DEFAULT_MAX_OVERSHOOT_PERCENT = 20
-    MAX_SEARCH_ATTEMPTS = 100_000
-    MAX_UTXOS = 2_000
+    MAX_SEARCH_ATTEMPTS = 800
+    MAX_UTXOS = 180
 
     def __init__(self, max_bnb_overshoot: Optional[float] = None):
         if max_bnb_overshoot is None:
@@ -367,8 +367,8 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
 
     def __init__(
         self,
-        probability: float,
-        target_pool_size: Optional[int] = None,
+        probability: float = 0.5,
+        target_pool_size: Optional[int] = 20,
         variant: RagVariant = RagVariant.Fit,
     ):
         if not isinstance(probability, (int, float)) or not math.isfinite(probability):
@@ -443,7 +443,7 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
                 if not available or (
                     self.variant is RagVariant.Fit
                     and selected_total_cents >= payment_cents
-                    and not self._has_fitting_denomination(
+                    and not self._has_fitting_token(
                         available,
                         selection_target_cents - selected_total_cents,
                     )
@@ -516,9 +516,9 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
     def _pick_unfiltered(
         self, available: Sequence[Token], ascending: bool, rng: Optional[object]
     ) -> Optional[Token]:
-        for _, denomination_tokens in self._denomination_snapshot(available, ascending):
+        for token in self._sorted_tokens(available, ascending):
             if self._random_draw(rng) < self.probability:
-                return denomination_tokens[0]
+                return token
         return None
 
     def _pick_fit(
@@ -529,19 +529,20 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
         selected_total_cents: int,
         rng: Optional[object],
     ) -> Optional[Token]:
-        snapshot = self._denomination_snapshot(available, ascending=False)
+        snapshot = self._sorted_tokens(available, ascending=False)
         fitting_exists = False
-        for value_cents, denomination_tokens in snapshot:
+        for token in snapshot:
+            value_cents = amount_to_cents(token.value)
             if value_cents <= remaining_cents:
                 fitting_exists = True
                 if self._random_draw(rng) < self.probability:
-                    return denomination_tokens[0]
+                    return token
 
         if fitting_exists:
             return None  # Retry the next scan.
         if selected_total_cents >= payment_cents:
             return None  # Stop; do not overshoot merely to reach the target.
-        return snapshot[-1][1][0] if snapshot else None
+        return self._sorted_tokens(available, ascending=True)[0] if available else None
 
     @staticmethod
     def _remove_identity(available, chosen: Token) -> None:
@@ -559,15 +560,7 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
         )
 
     @staticmethod
-    def _denomination_snapshot(available: Sequence[Token], ascending: bool):
-        denominations = {}
-        for token in available:
-            value_cents = amount_to_cents(token.value)
-            denominations.setdefault(value_cents, []).append(token)
-        return sorted(denominations.items(), key=lambda item: item[0], reverse=not ascending)
-
-    @staticmethod
-    def _has_fitting_denomination(available: Sequence[Token], remaining_cents: int) -> bool:
+    def _has_fitting_token(available: Sequence[Token], remaining_cents: int) -> bool:
         return any(
             amount_to_cents(token.value) <= remaining_cents for token in available
         )
@@ -586,8 +579,8 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
 def plan_randomized_adaptive_greedy_selection(
     tokens: Sequence[Token],
     payment_amount: float,
-    probability: float,
-    target_pool_size: Optional[int] = None,
+    probability: float = 0.5,
+    target_pool_size: Optional[int] = 20,
     variant: RagVariant = RagVariant.Fit,
     rng: Optional[object] = None,
 ) -> SelectionPlan:
