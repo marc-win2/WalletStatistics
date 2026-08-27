@@ -308,7 +308,7 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
         self.assertEqual(plan.selected_total, 10.50)
         self.assertEqual(plan.change, 0.50)
 
-    def test_probability_zero_uses_largest_first_safety_top_up(self):
+    def test_probability_zero_uses_deterministic_fit_greedy_fallback(self):
         rng = ConstantRng(0.5)
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(8.00, 1), Token(5.00, 2), Token(3.00, 3)],
@@ -318,9 +318,9 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
             rng=rng,
         )
 
-        self.assertEqual([token.sno for token in plan.inputs], [1, 2])
-        self.assertEqual(plan.change, 3.00)
-        self.assertEqual(rng.calls, 3 * RandomizedAdaptiveGreedyStrategy.MAX_ATTEMPTS)
+        self.assertEqual([token.sno for token in plan.inputs], [1, 3])
+        self.assertEqual(plan.change, 1.00)
+        self.assertEqual(rng.calls, 3)
 
     def test_target_pool_size_boundary_disables_adaptive_scaling(self):
         for target_pool_size in (None, 0, 3, 4):
@@ -384,7 +384,7 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
                 self.assertEqual([token.sno for token in plan.inputs], [1])
                 self.assertEqual(plan.change, 2.00)
 
-    def test_fit_stops_after_payment_when_no_token_fits_adaptive_remainder(self):
+    def test_fit_overshoots_when_needed_to_reach_adaptive_target(self):
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(20.00, 1), Token(6.00, 2), Token(4.00, 3)],
             10.00,
@@ -394,11 +394,11 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
             rng=ConstantRng(0.0),
         )
 
-        self.assertEqual([token.sno for token in plan.inputs], [2, 3])
-        self.assertEqual(plan.selected_total, 10.00)
-        self.assertEqual(plan.change, 0.00)
+        self.assertEqual([token.sno for token in plan.inputs], [2, 3, 1])
+        self.assertEqual(plan.selected_total, 30.00)
+        self.assertEqual(plan.change, 20.00)
 
-    def test_fit_uses_smallest_without_random_draw_when_nothing_fits(self):
+    def test_fit_uses_smallest_after_one_decision_per_utxo(self):
         rng = ConstantRng(0.0)
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(12.00, 1), Token(7.00, 2), Token(6.00, 3)],
@@ -410,20 +410,24 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
 
         self.assertEqual([token.sno for token in plan.inputs], [2, 3])
         self.assertEqual(plan.change, 5.00)
-        self.assertEqual(rng.calls, 1)
+        self.assertEqual(rng.calls, 3)
 
-    def test_fit_retries_a_failed_fitting_scan(self):
-        rng = SequenceRng([0.9, 0.9, 0.1, 0.1])
+    def test_fit_rejected_utxo_is_locked_for_the_remainder_of_payment(self):
+        rng = SequenceRng([0.9, 0.1, 0.1])
+        rejected = Token(6.00, 1)
+        accepted_four = Token(4.00, 2)
+        accepted_three = Token(3.00, 3)
         plan = plan_randomized_adaptive_greedy_selection(
-            [Token(6.00, 1), Token(4.00, 2)],
-            10.00,
+            [rejected, accepted_four, accepted_three],
+            7.00,
             probability=0.5,
             variant=RagVariant.Fit,
             rng=rng,
         )
 
-        self.assertEqual([token.sno for token in plan.inputs], [1, 2])
-        self.assertEqual(rng.calls, 4)
+        self.assertEqual(plan.inputs, (accepted_four, accepted_three))
+        self.assertNotIn(rejected, plan.inputs)
+        self.assertEqual(rng.calls, 3)
 
     def test_adaptive_largest_first_remains_descending(self):
         plan = plan_randomized_adaptive_greedy_selection(
@@ -439,7 +443,7 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
         self.assertEqual(plan.selected_total, 18.00)
 
     def test_probability_is_checked_independently_for_duplicate_tokens(self):
-        rng = SequenceRng([0.9, 0.1])
+        rng = SequenceRng([0.9, 0.1, 0.1])
         plan = plan_randomized_adaptive_greedy_selection(
             [Token(5.00, 1), Token(5.00, 2), Token(3.00, 3)],
             3.00,
@@ -450,7 +454,7 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
 
         self.assertEqual([token.sno for token in plan.inputs], [2])
         self.assertEqual(plan.change, 2.00)
-        self.assertEqual(rng.calls, 2)
+        self.assertEqual(rng.calls, 3)
 
     def test_injected_rng_makes_selection_deterministic(self):
         rng = SequenceRng([0.9, 0.1, 0.1])
@@ -462,8 +466,8 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
             rng=rng,
         )
 
-        self.assertEqual([token.sno for token in plan.inputs], [2, 1])
-        self.assertEqual(plan.change, 5.00)
+        self.assertEqual([token.sno for token in plan.inputs], [2, 3])
+        self.assertEqual(plan.change, 0.00)
         self.assertEqual(rng.calls, 3)
 
     def test_duplicate_token_identity_and_successful_selection_purity(self):
@@ -496,20 +500,24 @@ class RandomizedAdaptiveGreedyTests(unittest.TestCase):
 
         self.assertEqual(tokens, original_tokens)
 
-    def test_attempt_limit_counts_scans_then_uses_safety_top_up(self):
-        rng = ConstantRng(0.5)
-        with patch.object(RandomizedAdaptiveGreedyStrategy, "MAX_ATTEMPTS", 2):
-            plan = plan_randomized_adaptive_greedy_selection(
-                [Token(8.00, 1), Token(5.00, 2)],
-                10.00,
-                probability=0.0,
-                variant=RagVariant.LargestFirst,
-                rng=rng,
-            )
+    def test_underfunded_accepted_set_uses_rejected_greedy_fallback(self):
+        rng = SequenceRng([0.1, 0.9, 0.9])
+        accepted = Token(8.00, 1)
+        rejected_five = Token(5.00, 2)
+        rejected_three = Token(3.00, 3)
 
-        self.assertEqual(rng.calls, 4)
-        self.assertEqual([token.sno for token in plan.inputs], [1, 2])
-        self.assertEqual(plan.change, 3.00)
+        plan = plan_randomized_adaptive_greedy_selection(
+            [accepted, rejected_five, rejected_three],
+            10.00,
+            probability=0.5,
+            variant=RagVariant.Fit,
+            rng=rng,
+        )
+
+        self.assertEqual(plan.inputs, (accepted, rejected_three))
+        self.assertNotIn(rejected_five, plan.inputs)
+        self.assertEqual(plan.change, 1.00)
+        self.assertEqual(rng.calls, 3)
 
 
 if __name__ == "__main__":

@@ -92,12 +92,16 @@ when the search is exhausted or the wallet contains more than 180 tokens. This
 fallback selects the largest UTXOs that fit the remainder and uses the smallest
 remaining UTXO only when overshoot is unavoidable. `rag` accepts `probability`,
 `target_pool_size`, and `variant` (`"fit"` by default, `"largest_first"`, or
-`"smallest_first_consolidate"`). Each candidate UTXO is independently accepted
-with a selection probability that defaults to 0.5. As in Schneider's modified
-Greedy experiment, its target pool size defaults to 20, so RAG adaptively raises
-its selection target once the wallet contains more than 20 tokens. A seeded
-simulation supplies its existing selection RNG to RAG, making its sequence
-reproducible.
+`"smallest_first_consolidate"`). Every UTXO receives exactly one independent
+accept/reject decision per payment, with an acceptance probability that defaults
+to 0.5. Rejected UTXOs remain in the wallet and are locked for that payment. If
+the accepted set cannot fund the actual payment, a deterministic Fit Greedy
+fallback overrides only the locks needed to guarantee payment. As in
+Schneider's modified Greedy experiment, the target pool size defaults to 20, so
+RAG adaptively raises its selection target once the wallet contains more than
+20 tokens. The Fit variant continues through the scaled target and uses the
+smallest eligible UTXO when overshoot is unavoidable. A seeded simulation
+supplies its existing selection RNG to RAG, making its sequence reproducible.
 
 ## Installation
 

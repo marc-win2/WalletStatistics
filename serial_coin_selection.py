@@ -376,9 +376,7 @@ class RagVariant(str, Enum):
 
 
 class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
-    """Serial Randomized Adaptive Greedy (RAG) payment selection."""
-
-    MAX_ATTEMPTS = 10_000
+    """One-decision-per-UTXO Randomized Adaptive Greedy selection."""
 
     def __init__(
         self,
@@ -434,51 +432,37 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
             payment_cents, balance_cents, len(available)
         )
         adaptive = selection_target_cents > payment_cents
+        eligible = []
+        rejected = []
+        for token in self._decision_order(available, adaptive):
+            if self._random_draw(rng) < self.probability:
+                eligible.append(token)
+            else:
+                rejected.append(token)
+
         selected = []
         selected_total_cents = 0
-        attempts = 0
-
-        while (
-            selected_total_cents < selection_target_cents
-            and attempts < self.MAX_ATTEMPTS
-        ):
-            attempts += 1
+        while selected_total_cents < selection_target_cents and eligible:
             candidate = self._choose_candidate(
-                available=available,
+                available=eligible,
                 adaptive=adaptive,
                 remaining_cents=selection_target_cents - selected_total_cents,
-                payment_cents=payment_cents,
-                selected_total_cents=selected_total_cents,
-                rng=rng,
             )
-            if candidate is None:
-                # ``None`` represents either Retry or Stop.  Retry is
-                # distinguished by the loop condition; Stop only occurs when
-                # no candidate remains or Fit has already covered payment.
-                if not available or (
-                    self.variant is RagVariant.Fit
-                    and selected_total_cents >= payment_cents
-                    and not self._has_fitting_token(
-                        available,
-                        selection_target_cents - selected_total_cents,
-                    )
-                ):
-                    break
-                continue
-
-            self._remove_identity(available, candidate)
+            self._remove_identity(eligible, candidate)
             selected.append(candidate)
             selected_total_cents += amount_to_cents(candidate.value)
 
-        # Randomness/adaptive consumption must never leave an underfunded
-        # payment.  This safety top-up is deliberately unconditional
-        # largest-first and runs only while actual payment is uncovered.
+        # A one-shot Bernoulli mask can reject too much value to fund the real
+        # payment, especially while the wallet contains only its initial UTXO.
+        # In that case alone, override the lock with deterministic Fit Greedy.
         if selected_total_cents < payment_cents:
-            for token in self._sorted_tokens(available, ascending=False):
-                if selected_total_cents >= payment_cents:
-                    break
-                selected.append(token)
-                selected_total_cents += amount_to_cents(token.value)
+            remaining_payment_cents = payment_cents - selected_total_cents
+            fallback = GreedyStrategy().select(
+                rejected,
+                cents_to_amount(remaining_payment_cents),
+            )
+            selected.extend(fallback.inputs)
+            selected_total_cents += fallback.selected_total_cents
 
         if selected_total_cents < payment_cents:
             raise RuntimeError("RAG safety top-up could not cover a funded payment.")
@@ -512,52 +496,29 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
         available: Sequence[Token],
         adaptive: bool,
         remaining_cents: int,
-        payment_cents: int,
-        selected_total_cents: int,
-        rng: Optional[object],
-    ) -> Optional[Token]:
+    ) -> Token:
         if self.variant is RagVariant.LargestFirst:
-            return self._pick_unfiltered(available, False, rng)
+            return self._sorted_tokens(available, ascending=False)[0]
         if self.variant is RagVariant.SmallestFirstConsolidate:
-            return self._pick_unfiltered(available, adaptive, rng)
-        return self._pick_fit(
-            available,
-            remaining_cents,
-            payment_cents,
-            selected_total_cents,
-            rng,
-        )
+            return self._sorted_tokens(available, ascending=adaptive)[0]
 
-    def _pick_unfiltered(
-        self, available: Sequence[Token], ascending: bool, rng: Optional[object]
-    ) -> Optional[Token]:
-        for token in self._sorted_tokens(available, ascending):
-            if self._random_draw(rng) < self.probability:
-                return token
-        return None
+        fitting = [
+            token
+            for token in available
+            if amount_to_cents(token.value) <= remaining_cents
+        ]
+        if fitting:
+            return self._sorted_tokens(fitting, ascending=False)[0]
+        # Fit follows the survey's Greedy second phase.  This now applies to
+        # the scaled adaptive target as well as to the actual payment target.
+        return self._sorted_tokens(available, ascending=True)[0]
 
-    def _pick_fit(
-        self,
-        available: Sequence[Token],
-        remaining_cents: int,
-        payment_cents: int,
-        selected_total_cents: int,
-        rng: Optional[object],
-    ) -> Optional[Token]:
-        snapshot = self._sorted_tokens(available, ascending=False)
-        fitting_exists = False
-        for token in snapshot:
-            value_cents = amount_to_cents(token.value)
-            if value_cents <= remaining_cents:
-                fitting_exists = True
-                if self._random_draw(rng) < self.probability:
-                    return token
-
-        if fitting_exists:
-            return None  # Retry the next scan.
-        if selected_total_cents >= payment_cents:
-            return None  # Stop; do not overshoot merely to reach the target.
-        return self._sorted_tokens(available, ascending=True)[0] if available else None
+    def _decision_order(
+        self, available: Sequence[Token], adaptive: bool
+    ) -> Sequence[Token]:
+        if self.variant is RagVariant.SmallestFirstConsolidate and adaptive:
+            return self._sorted_tokens(available, ascending=True)
+        return self._sorted_tokens(available, ascending=False)
 
     @staticmethod
     def _remove_identity(available, chosen: Token) -> None:
@@ -572,12 +533,6 @@ class RandomizedAdaptiveGreedyStrategy(CoinSelectionStrategy):
             available,
             key=lambda token: amount_to_cents(token.value),
             reverse=not ascending,
-        )
-
-    @staticmethod
-    def _has_fitting_token(available: Sequence[Token], remaining_cents: int) -> bool:
-        return any(
-            amount_to_cents(token.value) <= remaining_cents for token in available
         )
 
     @staticmethod
