@@ -24,6 +24,7 @@ class SimulationHandler:
     )
     COIN_SELECTION_STRATEGIES = {
         "boltzmann": "selectTokenBoltzmann",
+        "random": "selectTokenRandomDraw",
         "distributionDraw": "selectTokenBoltzmann",
         "greedy": "selectPaymentPlan",
         "lvf": "selectPaymentPlan",
@@ -67,6 +68,8 @@ class SimulationHandler:
         self.depositMode = "singletoken" # "singletoken" or "drawtokenFlexibleBeta"
         self.adjustBetaAfterEachTransaction = adjustBetaAfterEachTransaction # triggers self.adjustBetaDynamically() after each transaction
         self.setBetaAdjustmentMode(betaAdjustmentMode)
+        if self.coinSelectionStrategy == "random":
+            mode = "uniform"
         self.distMode = mode # "canonical", "grandcanonical", "uniform"
         self.doEmergenceRefund = doEmergRefund # If True, the emergence refund is triggered if the total value of the wallet is below a certain threshold
         if self.distMode == "uniform":
@@ -101,7 +104,7 @@ class SimulationHandler:
         self.rag_variant = variant
         # Construct once during setup solely to validate the strategy-specific
         # configuration.  Selection itself remains payment-local and pure.
-        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw"}:
+        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw", "random"}:
             self._createPaymentStrategy()
         # Filled only by payment-level strategies.  Keeping it separate from
         # handlePayment's Wallet return value preserves the old public API.
@@ -225,6 +228,15 @@ class SimulationHandler:
             )
         except InsufficientFundsError as error:
             raise ValueError(str(error)) from error
+
+    def selectTokenRandomDraw(self, transactionValue):
+        """Draw uniformly from current tokens, independent of their values."""
+        del transactionValue
+        tokens = self.highThroughputWallet.tokens
+        if not tokens:
+            return None, -1, None
+        index = int(self.ownrng.integers(len(tokens)))
+        return tokens[index], index, 1.0
 
     def selectTokenBoltzmann(self, transactionValue):
         """Select one token using the configured Boltzmann sampling mode."""
@@ -562,7 +574,7 @@ class SimulationHandler:
 
         selectedWallet = Wallet()
 
-        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw"}:
+        if self.coinSelectionStrategy not in {"boltzmann", "distributionDraw", "random"}:
             # Plan before changing the wallet, then apply the concrete inputs
             # as one transaction.  Plans carry original Token identities and
             # therefore retain serial-number accounting and bucket updates.

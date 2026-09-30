@@ -800,6 +800,12 @@ def getCoinSelectionExperimentConfigurations():
             'coinSelectionStrategy': 'lvf',
             'variant': 'fit',
         },
+        {
+            'name': 'random',
+            'directoryName': 'RandomDraw',
+            'coinSelectionStrategy': 'random',
+            'variant': 'fit',
+        },
     )
 
 
@@ -1095,12 +1101,12 @@ def parseCommandLineArguments(arguments=None):
         default=strategyNames,
         help=(
             "coin-selection strategies to run (default: boltzmann rag_fit "
-            "branch_and_bound lvf)"
+            "branch_and_bound lvf random)"
         ),
     )
     parser.add_argument(
         "--coin-selection-strategy",
-        choices=("boltzmann", "greedy", "branch_and_bound", "rag", "lvf"),
+        choices=("boltzmann", "greedy", "branch_and_bound", "rag", "lvf", "random"),
         default="boltzmann",
         help="strategy for the default single-simulation mode",
     )
@@ -1170,7 +1176,7 @@ def parseCommandLineArguments(arguments=None):
         dest="strategy_output_path",
         default="Simulations/CoinSelectionMatrix",
         help=(
-            "root directory for RAG and BnB output "
+            "root directory for beta-independent strategy output "
             "(default: Simulations/CoinSelectionMatrix)"
         ),
     )

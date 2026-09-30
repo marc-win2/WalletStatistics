@@ -57,7 +57,9 @@ Coin-selection behavior is configured along two separate axes:
 
 - `coinSelectionStrategy` selects the algorithm. `boltzmann` (and the alias
   `distributionDraw`) retains the established token-by-token distribution
-  behavior. Payment-level alternatives are `greedy`, `branchAndBound` (also
+  behavior. `random` selects uniformly among individual tokens, independently
+  of their values, and disables beta adjustment. It requires token sampling.
+  Payment-level alternatives are `greedy`, `branchAndBound` (also
   `branch_and_bound`), `lvf`, and `rag`.
 - For `boltzmann`/`distributionDraw`, `samplingMode` selects how candidates are
   evaluated. `token` uses the supported token-level computation, while
@@ -148,6 +150,34 @@ python3 main.py \
   --seed 12345
 ```
 
+Run uniform Random Draw with a reproducible seed:
+
+```bash
+python3 main.py --coin-selection-strategy random --transaction-scenario gaussian --num_runs 100 --num_iter 100000 --seed 12345 --output-path Simulations/RandomDraw/Gaussian
+```
+
+Use `--transaction-scenario dirichletFloat` with a different output path for the
+Dirichlet workload, or `--matrix --strategies random` to run both workloads.
+Random Draw removes each selected token before the next draw and returns any
+excess as change, using the existing payment counting and wallet funding rules.
+
+Run all four crosscheck algorithms (LVF, Random Draw, Boltzmann Draw with
+`microcanonicalApprox`, and basic Greedy) on both workloads:
+
+```bash
+./runCoinSelectionCrosscheck.sh
+```
+
+Defaults are 100 runs of 100000 payments per configuration, seed 12345, and
+output below `Simulations/Crosscheck/<scenario>/<algorithm>/`. Only Boltzmann
+uses beta adjustment. Override settings through environment variables, e.g.:
+
+```bash
+NUM_RUNS=1 NUM_ITER=100 OUTPUT_ROOT=Simulations/CrosscheckSmall ./runCoinSelectionCrosscheck.sh
+```
+
+`SEED` and `PYTHON_BIN` can also be overridden. The script stops if a run fails.
+
 Run the independent LVF strategy with:
 
 ```bash
@@ -170,7 +200,7 @@ The integer multinomial/Dirichlet generator remains available in the source but
 is not part of the standard experiment matrix.
 
 Pass `--matrix` to run the complete experiment set. Boltzmann crosses the three
-beta modes with both workloads. Because RAG Fit, Branch-and-Bound, and LVF do not use
+beta modes with both workloads. Because RAG Fit, Branch-and-Bound, LVF, and Random Draw do not use
 beta for coin selection, each of them runs the two workloads only once with
 dynamic beta adjustment disabled. Matrix configurations default to 100
 independent runs and 100 configured payments per run. Change these dimensions
@@ -222,7 +252,7 @@ retaining independent coin-selection randomness.
 
 Large iteration counts are computationally expensive, particularly for
 Branch-and-Bound. The six established Boltzmann configurations remain in
-`Simulations/BetaAdjustmentMatrix/`. The six beta-independent strategy
+`Simulations/BetaAdjustmentMatrix/`. The eight beta-independent strategy
 configurations are written separately to `Simulations/CoinSelectionMatrix/`:
 
 ```text
@@ -233,7 +263,10 @@ Simulations/CoinSelectionMatrix/
 ├── BranchAndBound/
 │   ├── Gaussian/
 │   └── DirichletFloat/
-└── LVF/
+├── LVF/
+│   ├── Gaussian/
+│   └── DirichletFloat/
+└── RandomDraw/
     ├── Gaussian/
     └── DirichletFloat/
 ```
@@ -293,7 +326,7 @@ python3 averageSimulationPlots.py \
   --save_path Simulations/example/DataGlobal
 ```
 
-After generating the beta-independent strategy matrix, aggregate all six
+After generating the beta-independent strategy matrix, aggregate all eight
 configurations with the wrapper script:
 
 ```bash

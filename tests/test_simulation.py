@@ -46,6 +46,42 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(simulation.samplingMode, "token")
         self.assertFalse(simulation.useBucketsForProbabilityComp)
 
+    def test_random_draw_uses_uniform_token_indices_without_value_filtering(self):
+        simulation = make_simulation(coinSelectionStrategy="random", adjustBetaAfterEachTransaction=True)
+        set_wallet(simulation, [1.0, 100.0, 100.0])
+        simulation.ownrng = Mock()
+        simulation.ownrng.integers.return_value = 2
+        token, index, _ = simulation.tokenSelectionProcess(2.0)
+        simulation.ownrng.integers.assert_called_once_with(3)
+        self.assertIs(token, simulation.highThroughputWallet.tokens[2])
+        self.assertEqual(index, 2)
+        self.assertFalse(simulation.adjustBetaAfterEachTransaction)
+        self.assertEqual(simulation.coinSelectionDistr.mode, "uniform")
+
+    def test_random_draw_payment_samples_without_replacement_and_creates_change(self):
+        simulation = make_simulation(coinSelectionStrategy="random")
+        set_wallet(simulation, [3.0, 8.0, 20.0])
+        original = list(simulation.highThroughputWallet.tokens)
+        simulation.ownrng = Mock()
+        simulation.ownrng.integers.return_value = 0
+        selected = simulation.handlePayment(-10.0)
+        self.assertEqual([t.value for t in selected.tokens], [3.0, 8.0, 1.0])
+        self.assertIs(selected.tokens[0], original[0])
+        self.assertIs(selected.tokens[1], original[1])
+        self.assertEqual([c.args[0] for c in simulation.ownrng.integers.call_args_list], [3, 2])
+        self.assertEqual(simulation.highThroughputWallet.getTotalValue(), 21.0)
+        self.assertEqual(simulation.tokenNoPerBucket, [0, 1, 0, 1, 0, 0])
+
+    def test_seeded_random_draw_is_reproducible(self):
+        first = make_simulation(coinSelectionStrategy="random", seed=71)
+        second = make_simulation(coinSelectionStrategy="random", seed=71)
+        for simulation in (first, second):
+            set_wallet(simulation, [1.0, 2.0, 3.0, 5.0, 20.0])
+        for amount in (4.0, 6.0):
+            left = first.handlePayment(-amount)
+            right = second.handlePayment(-amount)
+            self.assertEqual([(t.sno, t.value) for t in left.tokens], [(t.sno, t.value) for t in right.tokens])
+
     def test_invalid_coin_selection_strategy_is_rejected(self):
         with self.assertRaisesRegex(
             ValueError,
@@ -58,7 +94,7 @@ class SimulationTests(unittest.TestCase):
             make_simulation(samplingMode="unknown")
 
     def test_payment_strategies_reject_bucket_legacy_sampling(self):
-        for strategy in ("greedy", "branchAndBound", "rag", "lvf"):
+        for strategy in ("greedy", "branchAndBound", "rag", "lvf", "random"):
             with self.subTest(strategy=strategy):
                 with self.assertRaisesRegex(ValueError, "bucketLegacy.*only supported"):
                     make_simulation(

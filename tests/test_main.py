@@ -22,7 +22,7 @@ class MainTests(unittest.TestCase):
         )
         self.assertEqual(
             defaultArguments.strategies,
-            ("boltzmann", "rag_fit", "branch_and_bound", "lvf"),
+            ("boltzmann", "rag_fit", "branch_and_bound", "lvf", "random"),
         )
         self.assertEqual(
             defaultArguments.beta_output_path,
@@ -65,6 +65,15 @@ class MainTests(unittest.TestCase):
         self.assertFalse(experiment.call_args.kwargs["adjustBeta"])
         arguments = main.parseCommandLineArguments(["--matrix", "--strategies", "lvf"])
         self.assertEqual(arguments.strategies, ["lvf"])
+
+    @patch("main.os.makedirs")
+    @patch("main.runStandaloneSimulationExperiment")
+    def test_random_draw_cli_dispatches_without_beta_adjustment(self, experiment, mkdir):
+        main.main(["--coin-selection-strategy", "random", "--num_iter", "10"])
+        self.assertEqual(experiment.call_args.kwargs["coinSelectionStrategy"], "random")
+        self.assertFalse(experiment.call_args.kwargs["adjustBeta"])
+        arguments = main.parseCommandLineArguments(["--matrix", "--strategies", "random"])
+        self.assertEqual(arguments.strategies, ["random"])
 
     def test_matrix_mode_defaults_to_one_hundred_runs(self):
         matrixArguments = main.parseCommandLineArguments(["--matrix"])
@@ -201,7 +210,7 @@ class MainTests(unittest.TestCase):
 
         self.assertEqual(
             [item["coinSelectionStrategy"] for item in configurations],
-            ["boltzmann", "rag", "branchAndBound", "lvf"],
+            ["boltzmann", "rag", "branchAndBound", "lvf", "random"],
         )
         self.assertEqual(configurations[1]["variant"], "fit")
 
@@ -243,16 +252,18 @@ class MainTests(unittest.TestCase):
                 ),
                 os.path.join("strategy-results", "LVF", "Gaussian"),
                 os.path.join("strategy-results", "LVF", "DirichletFloat"),
+                os.path.join("strategy-results", "RandomDraw", "Gaussian"),
+                os.path.join("strategy-results", "RandomDraw", "DirichletFloat"),
             ],
         )
         betaMatrix.assert_called_once()
-        self.assertEqual(strategyExperiment.call_count, 6)
+        self.assertEqual(strategyExperiment.call_count, 8)
         self.assertEqual(
             [
                 call.kwargs["coinSelectionStrategy"]
                 for call in strategyExperiment.call_args_list
             ],
-            ["rag", "rag", "branchAndBound", "branchAndBound", "lvf", "lvf"],
+            ["rag", "rag", "branchAndBound", "branchAndBound", "lvf", "lvf", "random", "random"],
         )
         self.assertTrue(
             all(
