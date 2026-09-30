@@ -5,6 +5,7 @@ from coinselection import CoinSelectionDistribution
 from serial_coin_selection import (
     BranchAndBoundStrategy,
     GreedyStrategy,
+    LowestValueFirstStrategy,
     InsufficientFundsError,
     RagVariant,
     RandomizedAdaptiveGreedyStrategy,
@@ -25,6 +26,7 @@ class SimulationHandler:
         "boltzmann": "selectTokenBoltzmann",
         "distributionDraw": "selectTokenBoltzmann",
         "greedy": "selectPaymentPlan",
+        "lvf": "selectPaymentPlan",
         "branchAndBound": "selectPaymentPlan",
         "branch_and_bound": "selectPaymentPlan",
         "rag": "selectPaymentPlan",
@@ -196,6 +198,8 @@ class SimulationHandler:
 
     def _createPaymentStrategy(self):
         """Build the configured pure, payment-level strategy on demand."""
+        if self.coinSelectionStrategy == "lvf":
+            return LowestValueFirstStrategy()
         if self.coinSelectionStrategy == "greedy":
             return GreedyStrategy()
         if self.coinSelectionStrategy in {"branchAndBound", "branch_and_bound"}:

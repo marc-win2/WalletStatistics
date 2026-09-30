@@ -58,7 +58,7 @@ Coin-selection behavior is configured along two separate axes:
 - `coinSelectionStrategy` selects the algorithm. `boltzmann` (and the alias
   `distributionDraw`) retains the established token-by-token distribution
   behavior. Payment-level alternatives are `greedy`, `branchAndBound` (also
-  `branch_and_bound`), and `rag`.
+  `branch_and_bound`), `lvf`, and `rag`.
 - For `boltzmann`/`distributionDraw`, `samplingMode` selects how candidates are
   evaluated. `token` uses the supported token-level computation, while
   `bucketLegacy` preserves the former experimental bucket-based computation
@@ -83,6 +83,15 @@ plan, then remove its concrete input tokens and add one change token when the
 plan has change. This retains token serial-number and bucket accounting. The
 most recent plan is available as `simulation.lastSelectionPlan` after a
 successful payment-level selection.
+
+`lvf` (Lowest Value First) sorts tokens by ascending value and takes the
+shortest prefix that covers the payment, returning any excess as ordinary
+change. Equal-valued tokens retain their wallet order. Its independent
+`LowestValueFirstStrategy` implementation uses integer-cent arithmetic,
+consumes no randomness, and does not adapt the payment target. For example,
+paying 10 from tokens [8, 5, 3] selects [3, 5, 8] and returns 6 in change.
+Use `plan_lvf_selection(tokens, payment_amount)` for a pure plan, or
+`SimulationHandler(..., coinSelectionStrategy="lvf")` for wallet integration.
 
 `branchAndBound` accepts an absolute `max_bnb_overshoot`. When it is left at
 `None`, the search permits an overshoot of up to 20% of the current payment
@@ -139,6 +148,18 @@ python3 main.py \
   --seed 12345
 ```
 
+Run the independent LVF strategy with:
+
+```bash
+python3 main.py --coin-selection-strategy lvf --output-path Simulations/LVF
+```
+
+Run just its two workload configurations with:
+
+```bash
+python3 main.py --matrix --strategies lvf --num_runs 100 --num_iter 100000
+```
+
 The two experiment workloads are:
 
 - `gaussian`: Gaussian payments interleaved with Gaussian deposits.
@@ -149,7 +170,7 @@ The integer multinomial/Dirichlet generator remains available in the source but
 is not part of the standard experiment matrix.
 
 Pass `--matrix` to run the complete experiment set. Boltzmann crosses the three
-beta modes with both workloads. Because RAG Fit and Branch-and-Bound do not use
+beta modes with both workloads. Because RAG Fit, Branch-and-Bound, and LVF do not use
 beta for coin selection, each of them runs the two workloads only once with
 dynamic beta adjustment disabled. Matrix configurations default to 100
 independent runs and 100 configured payments per run. Change these dimensions
@@ -201,7 +222,7 @@ retaining independent coin-selection randomness.
 
 Large iteration counts are computationally expensive, particularly for
 Branch-and-Bound. The six established Boltzmann configurations remain in
-`Simulations/BetaAdjustmentMatrix/`. The four beta-independent strategy
+`Simulations/BetaAdjustmentMatrix/`. The six beta-independent strategy
 configurations are written separately to `Simulations/CoinSelectionMatrix/`:
 
 ```text
@@ -209,7 +230,10 @@ Simulations/CoinSelectionMatrix/
 ├── RAGFit/
 │   ├── Gaussian/
 │   └── DirichletFloat/
-└── BranchAndBound/
+├── BranchAndBound/
+│   ├── Gaussian/
+│   └── DirichletFloat/
+└── LVF/
     ├── Gaussian/
     └── DirichletFloat/
 ```
@@ -269,7 +293,7 @@ python3 averageSimulationPlots.py \
   --save_path Simulations/example/DataGlobal
 ```
 
-After generating the beta-independent strategy matrix, aggregate all four new
+After generating the beta-independent strategy matrix, aggregate all six
 configurations with the wrapper script:
 
 ```bash
@@ -326,7 +350,7 @@ setup.
 
 - `simulation.py`: wallet lifecycle, payments, deposits, and beta adjustment.
 - `coinselection.py`: Boltzmann weights and token-selection distributions.
-- `serial_coin_selection.py`: pure Greedy, Branch-and-Bound, and RAG payment
+- `serial_coin_selection.py`: pure LVF, Greedy, Branch-and-Bound, and RAG payment
   planners plus their shared selection-plan contract.
 - `wallet.py`: token and wallet models plus denomination handling.
 - `transaction.py`: random transaction generators.

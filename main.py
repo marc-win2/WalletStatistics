@@ -794,6 +794,12 @@ def getCoinSelectionExperimentConfigurations():
             'coinSelectionStrategy': 'branchAndBound',
             'variant': 'fit',
         },
+        {
+            'name': 'lvf',
+            'directoryName': 'LVF',
+            'coinSelectionStrategy': 'lvf',
+            'variant': 'fit',
+        },
     )
 
 
@@ -1089,12 +1095,12 @@ def parseCommandLineArguments(arguments=None):
         default=strategyNames,
         help=(
             "coin-selection strategies to run (default: boltzmann rag_fit "
-            "branch_and_bound)"
+            "branch_and_bound lvf)"
         ),
     )
     parser.add_argument(
         "--coin-selection-strategy",
-        choices=("boltzmann", "greedy", "branch_and_bound", "rag"),
+        choices=("boltzmann", "greedy", "branch_and_bound", "rag", "lvf"),
         default="boltzmann",
         help="strategy for the default single-simulation mode",
     )

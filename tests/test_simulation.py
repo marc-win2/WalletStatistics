@@ -58,7 +58,7 @@ class SimulationTests(unittest.TestCase):
             make_simulation(samplingMode="unknown")
 
     def test_payment_strategies_reject_bucket_legacy_sampling(self):
-        for strategy in ("greedy", "branchAndBound", "rag"):
+        for strategy in ("greedy", "branchAndBound", "rag", "lvf"):
             with self.subTest(strategy=strategy):
                 with self.assertRaisesRegex(ValueError, "bucketLegacy.*only supported"):
                     make_simulation(
@@ -211,6 +211,19 @@ class SimulationTests(unittest.TestCase):
 
         self.assertEqual(simulation.highThroughputWallet.tokens, originalTokens)
         self.assertEqual(simulation.highThroughputWallet.getTotalValue(), 10.0)
+
+    def test_lvf_payment_applies_plan_and_preserves_wallet_accounting(self):
+        simulation = make_simulation(coinSelectionStrategy="lvf")
+        set_wallet(simulation, [8.0, 5.0, 3.0, 20.0])
+        original = list(simulation.highThroughputWallet.tokens)
+        selected = simulation.handlePayment(-10.0)
+        self.assertEqual([t.value for t in selected.tokens], [3.0, 5.0, 8.0, 6.0])
+        self.assertEqual(simulation.lastSelectionPlan.inputs, (original[2], original[1], original[0]))
+        self.assertEqual(simulation.lastSelectionPlan.strategy, "lvf")
+        self.assertEqual(simulation.lastSelectionPlan.change, 6.0)
+        self.assertIs(simulation.highThroughputWallet.tokens[0], original[3])
+        self.assertEqual(simulation.highThroughputWallet.getTotalValue(), 26.0)
+        self.assertEqual(simulation.tokenNoPerBucket, [0, 0, 1, 1, 0, 0])
 
     def test_greedy_payment_strategy_applies_complete_plan_and_change(self):
         simulation = make_simulation(coinSelectionStrategy="greedy")

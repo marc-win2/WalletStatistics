@@ -102,6 +102,60 @@ class CoinSelectionStrategy(ABC):
         """
 
 
+class LowestValueFirstStrategy(CoinSelectionStrategy):
+    """Select ascending token values until the payment is covered."""
+
+    name = "lvf"
+
+    def select(
+        self,
+        tokens: Sequence[Token],
+        payment_amount: float,
+        rng: Optional[object] = None,
+    ) -> SelectionPlan:
+        del rng  # LVF is deterministic and consumes no random draws.
+        payment_cents = amount_to_cents(payment_amount)
+        if payment_cents <= 0:
+            raise ValueError("Payment amount must be positive.")
+
+        # Sort a copy once; stable ties preserve caller order and identity.
+        ordered = sorted(
+            ((token, amount_to_cents(token.value)) for token in tokens),
+            key=lambda item: item[1],
+        )
+        balance_cents = sum(value for _, value in ordered)
+        if balance_cents < payment_cents:
+            raise InsufficientFundsError(
+                "Insufficient wallet funds: payment requires "
+                f"{cents_to_amount(payment_cents):.2f}, but only "
+                f"{cents_to_amount(balance_cents):.2f} is available."
+            )
+
+        selected = []
+        selected_total_cents = 0
+        for token, value_cents in ordered:
+            selected.append(token)
+            selected_total_cents += value_cents
+            if selected_total_cents >= payment_cents:
+                break
+
+        return SelectionPlan(
+            inputs=tuple(selected),
+            selected_total=cents_to_amount(selected_total_cents),
+            payment_amount=cents_to_amount(payment_cents),
+            change=cents_to_amount(selected_total_cents - payment_cents),
+            changeless=False,
+            strategy=self.name,
+        )
+
+
+def plan_lvf_selection(
+    tokens: Sequence[Token], payment_amount: float, rng: Optional[object] = None
+) -> SelectionPlan:
+    """Convenience entry point for Lowest Value First payment selection."""
+    return LowestValueFirstStrategy().select(tokens, payment_amount, rng=rng)
+
+
 class GreedyStrategy(CoinSelectionStrategy):
     """Largest-fitting-first selection with smallest-token overshoot fallback."""
 

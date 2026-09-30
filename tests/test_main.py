@@ -22,7 +22,7 @@ class MainTests(unittest.TestCase):
         )
         self.assertEqual(
             defaultArguments.strategies,
-            ("boltzmann", "rag_fit", "branch_and_bound"),
+            ("boltzmann", "rag_fit", "branch_and_bound", "lvf"),
         )
         self.assertEqual(
             defaultArguments.beta_output_path,
@@ -56,6 +56,15 @@ class MainTests(unittest.TestCase):
             ["rag_fit", "branch_and_bound"],
         )
         self.assertEqual(selectedArguments.strategy_output_path, "new-results")
+
+    @patch("main.os.makedirs")
+    @patch("main.runStandaloneSimulationExperiment")
+    def test_lvf_cli_dispatches_independent_strategy(self, experiment, mkdir):
+        main.main(["--coin-selection-strategy", "lvf", "--num_iter", "10"])
+        self.assertEqual(experiment.call_args.kwargs["coinSelectionStrategy"], "lvf")
+        self.assertFalse(experiment.call_args.kwargs["adjustBeta"])
+        arguments = main.parseCommandLineArguments(["--matrix", "--strategies", "lvf"])
+        self.assertEqual(arguments.strategies, ["lvf"])
 
     def test_matrix_mode_defaults_to_one_hundred_runs(self):
         matrixArguments = main.parseCommandLineArguments(["--matrix"])
@@ -192,7 +201,7 @@ class MainTests(unittest.TestCase):
 
         self.assertEqual(
             [item["coinSelectionStrategy"] for item in configurations],
-            ["boltzmann", "rag", "branchAndBound"],
+            ["boltzmann", "rag", "branchAndBound", "lvf"],
         )
         self.assertEqual(configurations[1]["variant"], "fit")
 
@@ -232,16 +241,18 @@ class MainTests(unittest.TestCase):
                 os.path.join(
                     "strategy-results", "BranchAndBound", "DirichletFloat"
                 ),
+                os.path.join("strategy-results", "LVF", "Gaussian"),
+                os.path.join("strategy-results", "LVF", "DirichletFloat"),
             ],
         )
         betaMatrix.assert_called_once()
-        self.assertEqual(strategyExperiment.call_count, 4)
+        self.assertEqual(strategyExperiment.call_count, 6)
         self.assertEqual(
             [
                 call.kwargs["coinSelectionStrategy"]
                 for call in strategyExperiment.call_args_list
             ],
-            ["rag", "rag", "branchAndBound", "branchAndBound"],
+            ["rag", "rag", "branchAndBound", "branchAndBound", "lvf", "lvf"],
         )
         self.assertTrue(
             all(

@@ -4,6 +4,8 @@ from unittest.mock import patch
 from serial_coin_selection import (
     BranchAndBoundStrategy,
     GreedyStrategy,
+    LowestValueFirstStrategy,
+    plan_lvf_selection,
     InsufficientFundsError,
     RagVariant,
     RandomizedAdaptiveGreedyStrategy,
@@ -12,6 +14,57 @@ from serial_coin_selection import (
     plan_randomized_adaptive_greedy_selection,
 )
 from wallet import Token, Wallet
+
+
+class LowestValueFirstStrategyTests(unittest.TestCase):
+    def test_ascending_selection_includes_overshooting_coin(self):
+        tokens = [Token(3.00, 1), Token(8.00, 2), Token(5.00, 3)]
+        original = list(tokens)
+        plan = plan_lvf_selection(tokens, 10.00)
+        self.assertEqual(plan.inputs, (tokens[0], tokens[2], tokens[1]))
+        self.assertEqual(plan.selected_total, 16.00)
+        self.assertEqual(plan.payment_amount, 10.00)
+        self.assertEqual(plan.change, 6.00)
+        self.assertEqual(plan.strategy, "lvf")
+        self.assertFalse(plan.changeless)
+        self.assertFalse(plan.bnb_fallback_used)
+        self.assertEqual(tokens, original)
+        self.assertIs(plan.inputs[0], tokens[0])
+
+    def test_smaller_coin_precedes_larger_exact_match(self):
+        tokens = [Token(10.00, 1), Token(3.00, 2)]
+        plan = plan_lvf_selection(tokens, 10.00)
+        self.assertEqual(plan.inputs, (tokens[1], tokens[0]))
+        self.assertEqual(plan.change, 3.00)
+
+    def test_exact_cent_sum_and_stable_equal_value_order(self):
+        tokens = [Token(0.50, 1), Token(0.20, 2), Token(0.20, 3)]
+        plan = plan_lvf_selection(tokens, 0.40)
+        self.assertIs(plan.inputs[0], tokens[1])
+        self.assertIs(plan.inputs[1], tokens[2])
+        self.assertEqual(plan.selected_total_cents, 40)
+        self.assertEqual(plan.change_cents, 0)
+
+    def test_does_not_use_rng_or_scale_target_for_large_wallet(self):
+        tokens = [Token(1.00, i) for i in range(30)]
+        def unexpected_draw():
+            self.fail("LVF must not consume randomness")
+        plan = LowestValueFirstStrategy().select(tokens, 1.00, rng=unexpected_draw)
+        self.assertEqual(plan.inputs, (tokens[0],))
+        self.assertEqual(plan.change, 0.00)
+
+    def test_insufficient_funds_and_empty_wallet_are_non_mutating(self):
+        for tokens in ([], [Token(1.00, 1)]):
+            original = list(tokens)
+            with self.assertRaises(InsufficientFundsError):
+                plan_lvf_selection(tokens, 1.01)
+            self.assertEqual(tokens, original)
+
+    def test_invalid_payment_amounts(self):
+        for amount in (0.00, -1.00, 1.001, float("nan"), float("inf")):
+            with self.subTest(amount=amount):
+                with self.assertRaises(ValueError):
+                    plan_lvf_selection([Token(2.00, 1)], amount)
 
 
 class GreedyStrategyTests(unittest.TestCase):
